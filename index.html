@@ -20,15 +20,19 @@
   body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--f-body); display:flex; flex-direction:column; overflow:hidden; }
   img{max-width:100%;}
   a{ color:inherit; }
+  [hidden]{ display:none !important; }
   .shell{ max-width:1080px; margin:0 auto; padding-inline:1.3rem; }
   button{ font-family:inherit; }
 
   nav.top{ flex:none; z-index:20; background:var(--bg); border-bottom:1px solid var(--line); }
   nav.top .shell{ display:flex; align-items:center; justify-content:space-between; padding-block:.65rem; gap:1rem; flex-wrap:wrap; }
   .brand{ font-family:var(--f-display); font-weight:700; font-size:1.15rem; text-decoration:none; }
-  .navlinks{ display:flex; gap:1.4rem; font-size:.86rem; font-weight:600; }
-  .navlinks a{ text-decoration:none; color:var(--muted); }
-  .navlinks a:hover{ color:var(--ink); }
+  .nav-btn{
+    font-family:var(--f-body); font-size:.82rem; font-weight:700; padding:.5rem 1.1rem;
+    border-radius:999px; border:1px solid var(--accent); background:transparent; color:var(--accent);
+    cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem;
+  }
+  .nav-btn:hover{ background:var(--accent); color:#fff; }
 
   main{ flex:1; min-height:0; display:flex; flex-direction:column; }
 
@@ -121,9 +125,7 @@
 <nav class="top">
   <div class="shell">
     <a class="brand" href="#">EveryWear</a>
-    <div class="navlinks">
-      <a href="#" id="tryOnNavLink">Live passen</a>
-    </div>
+    <button class="nav-btn" id="tryOnNavLink" type="button">Live passen</button>
   </div>
 </nav>
 
