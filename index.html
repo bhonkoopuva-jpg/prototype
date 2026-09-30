@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>EveryWear</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f3ec; --surface:#ffffff; --ink:#241f18; --muted:#6f6656; --line:rgba(36,31,24,.13);
+    --accent:#c15a2f; --accent-strong:#ac4a24; --olive:#6d7a52; --navy:#3c5a68; --ochre:#cf9c3f; --sand:#cdbfa2;
+    --f-display:'Fraunces', Georgia, serif;
+    --f-body:'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15130f; --surface:#1d1a15; --ink:#f2ede2; --muted:#b3a993; --line:rgba(242,237,225,.14);
+      --accent:#e07a4d; --accent-strong:#f0906a; color-scheme:dark;
+    }
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--f-body); }
+  img{max-width:100%;}
+  a{ color:inherit; }
+  .shell{ max-width:1080px; margin:0 auto; padding-inline:1.3rem; }
+
+  nav.top{ position:sticky; top:0; z-index:20; background:rgba(247,243,236,.88); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) nav.top{ background:rgba(21,19,15,.88); } }
+  nav.top .shell{ display:flex; align-items:center; justify-content:space-between; padding-block:.85rem; gap:1rem; flex-wrap:wrap; }
+  .brand{ font-family:var(--f-display); font-weight:700; font-size:1.25rem; text-decoration:none; }
+  .navlinks{ display:flex; gap:1.4rem; font-size:.86rem; font-weight:600; }
+  .navlinks a{ text-decoration:none; color:var(--muted); }
+  .navlinks a:hover{ color:var(--ink); }
+
+  .hero{ padding-block:3.2rem 2.6rem; }
+  .hero-grid{ display:grid; grid-template-columns:1.1fr 1fr; gap:2.5rem; align-items:center; }
+  @media (max-width:760px){ .hero-grid{ grid-template-columns:1fr; } }
+  .eyebrow{ font-weight:700; letter-spacing:.16em; text-transform:uppercase; font-size:.72rem; color:var(--accent); margin-bottom:.7rem; }
+  h1{ font-family:var(--f-display); font-weight:700; font-size:clamp(2.1rem,5vw,3.2rem); line-height:1.05; margin:0 0 .9rem; }
+  .hero p.lead{ color:var(--muted); font-size:1.02rem; line-height:1.6; max-width:46ch; margin:0 0 1.6rem; }
+  .cta-row{ display:flex; gap:.8rem; flex-wrap:wrap; }
+  .btn{ font-family:var(--f-body); font-weight:700; font-size:.9rem; padding:.8rem 1.4rem; border-radius:999px; border:1px solid transparent; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.5rem; }
+  .btn-primary{ background:var(--accent); color:#fff; }
+  .btn-primary:hover{ background:var(--accent-strong); }
+  .btn-ghost{ background:transparent; border-color:var(--line); color:var(--ink); }
+  .hero-visual{ aspect-ratio:1/0.8; background:var(--surface); border:1px solid var(--line); border-radius:20px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  canvas#heroCanvas{ width:88%; height:auto; }
+
+  section{ padding-block:2.8rem; border-top:1px solid var(--line); }
+  .section-head{ margin-bottom:1.8rem; max-width:56ch; }
+  h2{ font-family:var(--f-display); font-weight:700; font-size:clamp(1.5rem,3vw,2.1rem); margin:0 0 .5rem; }
+  h2 + p{ color:var(--muted); line-height:1.6; margin:0; }
+
+  .story-grid{ display:grid; grid-template-columns:1fr 1fr; gap:2.4rem; }
+  @media (max-width:760px){ .story-grid{ grid-template-columns:1fr; } }
+  .story-card{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:1.5rem; }
+  .story-card .tag{ display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--olive); margin-bottom:.6rem; }
+  .story-card h3{ font-family:var(--f-display); font-size:1.15rem; margin:0 0 .5rem; }
+  .story-card p{ color:var(--muted); font-size:.92rem; line-height:1.6; margin:0; }
+
+  .tryon-wrap{ display:grid; grid-template-columns:1fr 1fr; gap:2rem; align-items:start; }
+  @media (max-width:760px){ .tryon-wrap{ grid-template-columns:1fr; } }
+  .stage{ position:relative; width:100%; background:#000; border:1px solid var(--line); border-radius:16px; overflow:hidden; aspect-ratio:4/3; }
+  video, canvas#liveCanvas{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  video{ transform:scaleX(-1); }
+  .overlay-msg{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:#fff; background:rgba(0,0,0,.55); font-size:.9rem; padding:1.5rem; line-height:1.5; }
+  .overlay-msg button{ margin-top:.8rem; padding:.6rem 1.2rem; border-radius:999px; border:none; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; font-size:.85rem; }
+  .controls-row{ display:flex; gap:.7rem; flex-wrap:wrap; margin-top:.9rem; }
+  .controls-row button{ flex:1; min-width:130px; padding:.65rem 1rem; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-weight:700; font-size:.85rem; cursor:pointer; }
+  .controls-row button.primary{ background:var(--accent); color:#fff; border-color:transparent; }
+
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:1.4rem; }
+  .panel h3{ font-family:var(--f-display); font-size:1.05rem; margin:0 0 .9rem; }
+  .swatches{ display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1rem; }
+  .swatch{ width:34px; height:34px; border-radius:50%; border:2px solid var(--line); cursor:pointer; padding:0; }
+  .swatch.active{ outline:2px solid var(--accent); outline-offset:2px; }
+  .hex-row{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+  .hex-row input[type="text"]{ font-family:ui-monospace,monospace; font-size:.85rem; padding:.5rem .7rem; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100px; }
+  .hex-row input[type="color"]{ width:38px; height:36px; border:none; border-radius:8px; cursor:pointer; padding:0; background:none; }
+  .hex-row button{ padding:.5rem .9rem; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font-size:.82rem; cursor:pointer; }
+
+  .collection-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; }
+  @media (max-width:760px){ .collection-grid{ grid-template-columns:repeat(2,1fr); } }
+  .frame-card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:1rem; text-align:center; cursor:pointer; }
+  .frame-card canvas{ width:100%; height:auto; margin-bottom:.5rem; }
+  .frame-card .name{ font-weight:700; font-size:.86rem; }
+  .frame-card .hexlabel{ font-family:ui-monospace,monospace; font-size:.72rem; color:var(--muted); }
+
+  footer{ border-top:1px solid var(--line); padding-block:2rem; }
+  footer .shell{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.8rem; }
+  footer p{ color:var(--muted); font-size:.8rem; margin:0; }
+  a#snapLink{ display:none; }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="shell">
+    <a class="brand" href="#top">EveryWear</a>
+    <div class="navlinks">
+      <a href="#verhaal">Verhaal</a>
+      <a href="#passen">Kleur passen</a>
+      <a href="#collectie">Collectie</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="shell hero-grid">
+    <div>
+      <div class="eyebrow">3D-geprinte monturen</div>
+      <h1>Een montuur zo uniek als jouw gezicht</h1>
+      <p class="lead">EveryWear print elk montuur op maat, in een biobased materiaal op basis van castorolie. Kies je eigen kleur en zie hem live op je gezicht staan.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#passen">Test met je camera</a>
+        <a class="btn btn-ghost" href="#verhaal">Ons verhaal</a>
+      </div>
+    </div>
+    <div class="hero-visual"><canvas id="heroCanvas" width="480" height="360"></canvas></div>
+  </div>
+</header>
+
+<section id="verhaal">
+  <div class="shell">
+    <div class="section-head">
+      <div class="eyebrow">Waarom EveryWear</div>
+      <h2>Gemaakt om te passen, niet om weg te gooien</h2>
+      <p>Elk montuur wordt per stuk geprint, op basis van jouw gezicht en jouw kleur. Geen voorraad, geen overschot.</p>
+    </div>
+    <div class="story-grid">
+      <div class="story-card">
+        <span class="tag">Materiaal</span>
+        <h3>Castorolie in plaats van petroleum</h3>
+        <p>Het montuur wordt geprint uit een biobased kunststof op basis van castorolie, in plaats van de petroleum-acetaat die de meeste brillen gebruiken.</p>
+      </div>
+      <div class="story-card">
+        <span class="tag">Productie</span>
+        <h3>Geprint op bestelling</h3>
+        <p>Elk montuur ontstaat pas na jouw bestelling, in de kleur die je zelf kiest. Er staat niets op voorraad te wachten tot het uit de mode raakt.</p>
+      </div>
+      <div class="story-card">
+        <span class="tag">Pasvorm</span>
+        <h3>Eén op één op jouw gezicht</h3>
+        <p>Omdat elk montuur los geprint wordt, is de vorm net zo makkelijk aan te passen aan jouw gezicht als de kleur.</p>
+      </div>
+      <div class="story-card">
+        <span class="tag">Einde levensduur</span>
+        <h3>Kies bewust, draag lang</h3>
+        <p>Een montuur dat je zelf hebt samengesteld, in de kleur die je echt wilde, is een montuur dat je minder snel vervangt.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="passen">
+  <div class="shell">
+    <div class="section-head">
+      <div class="eyebrow">Live AR</div>
+      <h2>Test de kleur op je eigen gezicht</h2>
+      <p>Geef de camera toegang. Het montuur wordt automatisch geplaatst en volgt je gezicht — kies daarna een kleur.</p>
+    </div>
+    <div class="tryon-wrap">
+      <div>
+        <div class="stage" id="stage">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="liveCanvas"></canvas>
+          <div class="overlay-msg" id="startMsg">
+            <div>
+              <div>Geef toegang tot je camera om de bril te passen.</div>
+              <button id="startBtn">Camera starten</button>
+            </div>
+          </div>
+        </div>
+        <div class="controls-row">
+          <button class="primary" id="snapBtn">Maak foto</button>
+          <button id="switchCamBtn">Wissel camera</button>
+        </div>
+        <a id="snapLink" download="everywear-pasfoto.png"></a>
+      </div>
+      <div class="panel">
+        <h3>Kleur montuur</h3>
+        <div class="swatches" id="swatches"></div>
+        <div class="hex-row">
+          <input type="text" id="hexInput" value="#F54927" maxlength="7">
+          <input type="color" id="colorPicker" value="#F54927">
+          <button id="applyHex">Toepassen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="collectie">
+  <div class="shell">
+    <div class="section-head">
+      <div class="eyebrow">Kleuren</div>
+      <h2>De collectie</h2>
+      <p>Elke kleur hierboven is ook los te printen. Tik een kleur aan om hem direct te passen.</p>
+    </div>
+    <div class="collection-grid" id="collectionGrid"></div>
+  </div>
+</section>
+
+<footer>
+  <div class="shell">
+    <span class="brand" style="font-family:var(--f-display);font-weight:700;">EveryWear</span>
+    <p>Prototype — 3D-geprinte monturen op basis van castorolie.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script>
+const PRESETS = [
+  {hex:'#F54927', name:'Cosmo Rood'}, {hex:'#1A1A1A', name:'Cosmo Zwart'},
+  {hex:'#3C5A68', name:'Cosmo Blauw'}, {hex:'#6D7A52', name:'Cosmo Olijf'},
+  {hex:'#CF9C3F', name:'Cosmo Oker'}, {hex:'#7D5A7A', name:'Cosmo Pruim'},
+  {hex:'#F2EDE2', name:'Cosmo Zand'}, {hex:'#8C5A3A', name:'Cosmo Bruin'},
+];
+let frameColor = '#F54927';
+
+function drawGlasses(ctx, cx, cy, unitScale, color){
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(unitScale, unitScale);
+  const lensW=58, lensH=40, rimW=9, gap=20, r=8;
+  ctx.lineJoin='round'; ctx.fillStyle=color; ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=1;
+  function rr(x,y,w,h,rad){
+    ctx.beginPath(); ctx.moveTo(x+rad,y); ctx.arcTo(x+w,y,x+w,y+h,rad); ctx.arcTo(x+w,y+h,x,y+h,rad);
+    ctx.arcTo(x,y+h,x,y,rad); ctx.arcTo(x,y,x+w,y,rad); ctx.closePath();
+  }
+  [-1,1].forEach(side=>{
+    const x = side===-1 ? -(gap/2+lensW) : gap/2, y = -lensH/2;
+    rr(x-rimW/2, y-rimW/2, lensW+rimW, lensH+rimW, r+rimW/2); ctx.fill(); ctx.stroke();
+    ctx.save(); rr(x,y,lensW,lensH,r); ctx.clip();
+    ctx.fillStyle='rgba(255,255,255,0.07)'; ctx.fillRect(x,y,lensW,lensH); ctx.restore();
+    const armX = side===-1 ? x-rimW/2 : x+lensW+rimW/2;
+    ctx.beginPath(); ctx.moveTo(armX,0); ctx.lineTo(armX+side*26,-4);
+    ctx.lineWidth=rimW*0.7; ctx.strokeStyle=color; ctx.lineCap='round'; ctx.stroke();
+  });
+  ctx.fillStyle=color; rr(-gap/2, -lensH/2+6, gap, 9, 4); ctx.fill();
+  ctx.restore();
+}
+
+function drawHero(){
+  const c = document.getElementById('heroCanvas'), ctx = c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  drawGlasses(ctx, c.width/2, c.height/2, 2.6, frameColor);
+}
+
+function buildCollection(){
+  const grid = document.getElementById('collectionGrid');
+  grid.innerHTML = '';
+  PRESETS.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'frame-card';
+    const cv = document.createElement('canvas'); cv.width=200; cv.height=110;
+    card.appendChild(cv);
+    const name = document.createElement('div'); name.className='name'; name.textContent=p.name;
+    const hex = document.createElement('div'); hex.className='hexlabel'; hex.textContent=p.hex;
+    card.appendChild(name); card.appendChild(hex);
+    card.onclick = ()=> setColor(p.hex);
+    grid.appendChild(card);
+    drawGlasses(cv.getContext('2d'), cv.width/2, cv.height/2, 1.55, p.hex);
+  });
+}
+
+const swatchesEl = document.getElementById('swatches');
+const hexInput = document.getElementById('hexInput');
+const colorPicker = document.getElementById('colorPicker');
+
+function buildSwatches(){
+  swatchesEl.innerHTML = '';
+  PRESETS.forEach(p=>{
+    const b = document.createElement('button');
+    b.className = 'swatch' + (p.hex.toUpperCase()===frameColor.toUpperCase() ? ' active' : '');
+    b.style.background = p.hex; b.title = p.name;
+    b.onclick = ()=> setColor(p.hex);
+    swatchesEl.appendChild(b);
+  });
+}
+function setColor(hex){
+  frameColor = hex.toUpperCase();
+  hexInput.value = frameColor; colorPicker.value = frameColor;
+  buildSwatches(); drawHero();
+}
+hexInput.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('applyHex').click(); });
+document.getElementById('applyHex').addEventListener('click', ()=>{
+  let v = hexInput.value.trim(); if(!v.startsWith('#')) v = '#'+v;
+  if(/^#([0-9A-Fa-f]{6})$/.test(v)) setColor(v); else alert('Vul een geldige hexcode in, bijv. #F54927');
+});
+colorPicker.addEventListener('input', ()=> setColor(colorPicker.value));
+
+buildSwatches(); buildCollection(); drawHero();
+
+/* ---- live camera AR ---- */
+const video = document.getElementById('video');
+const liveCanvas = document.getElementById('liveCanvas');
+const lctx = liveCanvas.getContext('2d');
+const startMsg = document.getElementById('startMsg');
+const startBtn = document.getElementById('startBtn');
+const snapBtn = document.getElementById('snapBtn');
+const snapLink = document.getElementById('snapLink');
+const switchCamBtn = document.getElementById('switchCamBtn');
+
+let currentStream = null, facingMode = 'user', faceMesh = null, running = false, lastLandmarks = null, busy = false;
+
+function resizeLiveCanvas(){
+  const rect = video.getBoundingClientRect();
+  liveCanvas.width = rect.width; liveCanvas.height = rect.height;
+}
+window.addEventListener('resize', resizeLiveCanvas);
+
+async function startCamera(){
+  try{
+    if(currentStream){ currentStream.getTracks().forEach(t=>t.stop()); }
+    currentStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode, width:{ideal:640}, height:{ideal:480} }, audio:false });
+    video.srcObject = currentStream;
+    await video.play();
+    resizeLiveCanvas();
+    startMsg.style.display = 'none';
+    if(!faceMesh) initFaceMesh();
+    if(!running){ running = true; requestAnimationFrame(loop); }
+  }catch(err){
+    startMsg.innerHTML = '<div>Kon geen toegang krijgen tot de camera.<br><span style="opacity:.8;font-size:.8em;">'+ (err.message||err) +'</span></div>';
+    startMsg.style.display = 'flex';
+  }
+}
+startBtn.addEventListener('click', startCamera);
+switchCamBtn.addEventListener('click', ()=>{
+  facingMode = facingMode==='user' ? 'environment' : 'user';
+  video.style.transform = facingMode==='user' ? 'scaleX(-1)' : 'none';
+  startCamera();
+});
+
+function initFaceMesh(){
+  faceMesh = new FaceMesh({ locateFile:(f)=> `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+  faceMesh.setOptions({ maxNumFaces:1, refineLandmarks:true, minDetectionConfidence:0.6, minTrackingConfidence:0.6 });
+  faceMesh.onResults(res=>{ lastLandmarks = (res.multiFaceLandmarks && res.multiFaceLandmarks[0]) || null; });
+}
+
+async function loop(){
+  if(!running) return;
+  if(video.readyState >= 2 && faceMesh && !busy){
+    busy = true;
+    try{ await faceMesh.send({ image: video }); } catch(e){}
+    busy = false;
+  }
+  drawLive();
+  requestAnimationFrame(loop);
+}
+
+function drawLive(){
+  const w = liveCanvas.width, h = liveCanvas.height;
+  lctx.clearRect(0,0,w,h);
+  if(!lastLandmarks) return;
+  const toXY = (idx)=>{ const p = lastLandmarks[idx]; return { x: p.x*w, y: p.y*h }; };
+  const leftOuter = toXY(33), rightOuter = toXY(263), noseBridge = toXY(168);
+  const mirrored = facingMode === 'user';
+  const mx = (x)=> mirrored ? (w-x) : x;
+  const p1 = { x: mx(leftOuter.x), y: leftOuter.y };
+  const p2 = { x: mx(rightOuter.x), y: rightOuter.y };
+  const dx = p2.x-p1.x, dy = p2.y-p1.y;
+  const eyeDist = Math.hypot(dx,dy);
+  const angle = Math.atan2(dy,dx);
+  const cx = (p1.x+p2.x)/2, cy = (p1.y+p2.y)/2 + eyeDist*0.03;
+  lctx.save(); lctx.translate(cx,cy); lctx.rotate(angle); lctx.translate(-cx,-cy);
+  drawGlasses(lctx, cx, cy, eyeDist/100, frameColor);
+  lctx.restore();
+}
+
+snapBtn.addEventListener('click', ()=>{
+  const out = document.createElement('canvas');
+  out.width = liveCanvas.width; out.height = liveCanvas.height;
+  const octx = out.getContext('2d');
+  octx.save();
+  if(facingMode==='user'){ octx.translate(out.width,0); octx.scale(-1,1); }
+  octx.drawImage(video, 0, 0, out.width, out.height);
+  octx.restore();
+  octx.drawImage(liveCanvas, 0, 0);
+  snapLink.href = out.toDataURL('image/png');
+  snapLink.click();
+});
+</script>
+</body>
+</html>
