@@ -21,7 +21,7 @@
   img{max-width:100%;}
   a{ color:inherit; }
   [hidden]{ display:none !important; }
-  .shell{ max-width:1080px; margin:0 auto; padding-inline:1.3rem; }
+  .shell{ max-width:1520px; margin:0 auto; padding-inline:1.6rem; width:100%; }
   button{ font-family:inherit; }
 
   nav.top{ flex:none; z-index:20; background:var(--bg); border-bottom:1px solid var(--line); }
@@ -212,10 +212,10 @@
 <script>
 /* ---------- configuration data (from the real Frame Studio) ---------- */
 const MONTUREN = [
-  { id:1, label:'Montuur 1', price:45, voor:'assets/montuur1-voor.jpg', zij:'assets/montuur1-zij.jpg' },
-  { id:2, label:'Montuur 2', price:45, voor:'assets/montuur2-voor.jpg', zij:'assets/montuur2-zij.jpg' },
-  { id:3, label:'Montuur 3', price:45, voor:'assets/montuur3-voor.jpg', zij:'assets/montuur3-zij.jpg' },
-  { id:4, label:'Montuur 4', price:45, voor:'assets/montuur4-voor.jpg', zij:'assets/montuur4-zij.jpg' },
+  { id:1, label:'Montuur 1', price:45, voor:'assets/montuur1-voor.jpg', zij:'assets/montuur1-zij.jpg', zijCrop:0.42 },
+  { id:2, label:'Montuur 2', price:45, voor:'assets/montuur2-voor.jpg', zij:'assets/montuur2-zij.jpg', zijCrop:0.42 },
+  { id:3, label:'Montuur 3', price:45, voor:'assets/montuur3-voor.jpg', zij:'assets/montuur3-zij.jpg', zijCrop:0.42 },
+  { id:4, label:'Montuur 4', price:45, voor:'assets/montuur4-voor.jpg', zij:'assets/montuur4-zij.jpg', zijCrop:0.42 },
 ];
 function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
 const montuurImgCache = {};
@@ -318,6 +318,71 @@ function drawTintedPhoto(ctx, img, w, h, color){
   return true;
 }
 
+/* ---- pootje (temple arm) styles, drawn attached to the hinge point of the cropped photo ----
+   x,y = hinge point (right edge of the cropped frame photo, vertical mid), scale = px per unit */
+function drawPootjeArm(ctx, x, y, scale, color, style){
+  ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+  ctx.fillStyle = color; ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 0.6;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  if(style === 'A'){ // classic taper, gentle downward curve
+    ctx.beginPath(); ctx.moveTo(0,-3.2);
+    ctx.quadraticCurveTo(24,-6, 46,2);
+    ctx.quadraticCurveTo(50,4, 50,8);
+    ctx.quadraticCurveTo(50,4, 46,6);
+    ctx.quadraticCurveTo(24,-1, 0,3.2);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else if(style === 'B'){ // thicker, straight, blunt tip
+    ctx.beginPath(); ctx.moveTo(0,-4.5);
+    ctx.lineTo(44,-3.5); ctx.lineTo(46,3.5); ctx.lineTo(0,4.5);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else if(style === 'C'){ // pronounced curl / comfort hook at the end
+    ctx.beginPath(); ctx.moveTo(0,-3.2);
+    ctx.quadraticCurveTo(22,-5, 38,0);
+    ctx.quadraticCurveTo(46,3, 44,9);
+    ctx.quadraticCurveTo(42,13, 37,11);
+    ctx.quadraticCurveTo(41,7, 34,4);
+    ctx.quadraticCurveTo(20,0, 0,3.2);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else { // D — thin wire, longer, minimal taper
+    ctx.beginPath(); ctx.moveTo(0,-1.6);
+    ctx.lineTo(52,-1.1); ctx.lineTo(54,1.1); ctx.lineTo(0,1.6);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---- side view: crop the real photo to just the hinge/lens area, tint it,
+   then attach a vector pootje in the same color so montuur + pootje read as one piece ---- */
+function drawSideComposite(ctx, img, w, h, color, montuur, pootjeStyle){
+  ctx.clearRect(0,0,w,h);
+  if(!img.complete || img.naturalWidth===0) return false;
+
+  const cropFrac = montuur.zijCrop || 0.42;
+  const sw = img.naturalWidth * cropFrac, sh = img.naturalHeight;
+  const scale = Math.min(w*0.62/sw, h/sh); // leave room on the right for the drawn pootje
+  const dw = sw*scale, dh = sh*scale;
+  const dx = w*0.5 - dw, dy = (h-dh)/2;
+
+  ctx.drawImage(img, 0, 0, sw, sh, dx, dy, dw, dh);
+  const [tr,tg,tb] = hexToRgb(color);
+  const frame = ctx.getImageData(dx, dy, Math.max(1,Math.round(dw)), Math.max(1,Math.round(dh)));
+  const d = frame.data;
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i], g=d[i+1], b=d[i+2];
+    if(r>235 && g>235 && b>235) continue;
+    const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+    d[i]   = tr*lum + r*0.18;
+    d[i+1] = tg*lum + g*0.18;
+    d[i+2] = tb*lum + b*0.18;
+  }
+  ctx.putImageData(frame, dx, dy);
+
+  const hingeX = dx + dw, hingeY = dy + dh*0.42;
+  drawPootjeArm(ctx, hingeX, hingeY, scale*3.1, color, pootjeStyle);
+  return true;
+}
+
 /* ---------- configurator preview: front + side canvases, drawn together ---------- */
 const previewCanvasVoor = document.getElementById('previewCanvasVoor');
 const previewCanvasZij = document.getElementById('previewCanvasZij');
@@ -337,11 +402,22 @@ function drawOneAngle(canvas, ctx, montuur, src, color, fallbackDraw){
   }
 }
 
+function drawZijAngle(canvas, ctx, montuur, color, pootjeStyle){
+  const img = loadMontuurImage(montuur.zij);
+  const w = canvas.width, h = canvas.height;
+  const ok = drawSideComposite(ctx, img, w, h, color, montuur, pootjeStyle);
+  if(!ok){
+    ctx.clearRect(0,0,w,h);
+    drawGlassesSide(ctx, w/2, h/2, 2.6, color);
+    img.onload = ()=>{ if(getMontuur(state.montuur)===montuur) drawPreview(); };
+  }
+}
+
 function drawPreview(){
   const color = getMateriaal(state.materiaal).hex;
   const montuur = getMontuur(state.montuur);
   drawOneAngle(previewCanvasVoor, pvctxVoor, montuur, montuur.voor, color, drawGlassesFront);
-  drawOneAngle(previewCanvasZij, pvctxZij, montuur, montuur.zij, color, drawGlassesSide);
+  drawZijAngle(previewCanvasZij, pvctxZij, montuur, color, state.pootje);
 
   const bgVar = state.light === 'studio' ? '--stage-studio' : state.light === 'daylight' ? '--stage-daylight' : '--stage-pearl';
   const bg = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
