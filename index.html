@@ -9,17 +9,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#f7f3ec; --surface:#ffffff; --ink:#241f18; --muted:#6f6656; --line:rgba(36,31,24,.13);
-    --accent:#c15a2f; --accent-strong:#ac4a24; --olive:#6d7a52; --navy:#3c5a68; --ochre:#cf9c3f;
-    --stage-studio:#e4e0d6; --stage-daylight:#fbf3e4; --stage-pearl:#f3ece8;
+    --bg:#fdfbf7; --surface:#ffffff; --ink:#4a4238; --muted:#948a7a; --line:rgba(74,66,56,.10);
+    --accent:#d97c4f; --accent-strong:#c1663b; --olive:#8a9878; --navy:#7192a3; --ochre:#e0b46a;
+    --stage-studio:#f1eee6; --stage-daylight:#fdf7ea; --stage-pearl:#faf3f0;
     --f-display:'Fraunces', Georgia, serif;
     --f-body:'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#15130f; --surface:#1d1a15; --ink:#f2ede2; --muted:#b3a993; --line:rgba(242,237,225,.14);
-      --accent:#e07a4d; --accent-strong:#f0906a;
-      --stage-studio:#26241e; --stage-daylight:#2e2a1f; --stage-pearl:#2a2422;
+      --bg:#1b1915; --surface:#242119; --ink:#f2ede2; --muted:#b3a993; --line:rgba(242,237,225,.13);
+      --accent:#e6996c; --accent-strong:#f0ac85;
+      --stage-studio:#2b2820; --stage-daylight:#332e21; --stage-pearl:#2f2825;
       color-scheme:dark;
     }
   }
@@ -50,32 +50,54 @@
   .studio-grid{ display:grid; grid-template-columns:1.15fr 1fr; gap:2rem; align-items:start; }
   @media (max-width:820px){ .studio-grid{ grid-template-columns:1fr; } }
 
-  .stage-card{ background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:1.1rem; }
-  .stage{ position:relative; width:100%; border-radius:14px; overflow:hidden; aspect-ratio:4/3; transition:background .25s; }
-  .stage canvas{ position:absolute; inset:0; width:100%; height:100%; }
-  .stage-toolbar{ display:flex; justify-content:space-between; align-items:center; margin-top:.9rem; gap:.8rem; flex-wrap:wrap; }
+  /* studio: preview fills the top ~70%, the picker sheet sits in the bottom ~30% */
+  .studio-grid{ display:block; }
+  .stage-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:20px; overflow:hidden;
+    display:flex; flex-direction:column; height:min(78vh, 760px);
+  }
+  .preview-area{ flex:7 1 0; min-height:0; padding:1rem 1rem 0; display:flex; flex-direction:column; }
+  .preview-toolbar{ display:flex; justify-content:flex-end; margin-bottom:.7rem; }
   .pill-group{ display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:.2rem; gap:.15rem; }
   .pill-group button{ border:none; background:transparent; padding:.4rem .85rem; border-radius:999px; font-size:.78rem; font-weight:600; cursor:pointer; color:var(--muted); }
   .pill-group button.active{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
 
-  .action-row{ display:flex; gap:.7rem; flex-wrap:wrap; margin-top:1rem; }
-  .action-row button{ flex:1; min-width:120px; padding:.75rem 1rem; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-weight:700; font-size:.85rem; cursor:pointer; }
-  .action-row button.primary{ background:var(--accent); color:#fff; border-color:transparent; }
-  .action-row button.primary:hover{ background:var(--accent-strong); }
+  .stage-pair{ flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+  .stage-single{ position:relative; border-radius:14px; overflow:hidden; transition:background .25s; min-width:0; }
+  .stage-single canvas{ position:absolute; inset:0; width:100%; height:100%; }
+  .stage-single .angle-label{
+    position:absolute; top:.6rem; left:.7rem; font-size:.7rem; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); background:color-mix(in srgb, var(--surface) 75%, transparent);
+    padding:.2rem .55rem; border-radius:999px; z-index:2;
+  }
 
-  .options-card{ background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:1.2rem; }
-  .tabs{ display:flex; gap:.4rem; border-bottom:1px solid var(--line); margin-bottom:1rem; }
-  .tabs button{ border:none; background:none; padding:.6rem .3rem; font-size:.86rem; font-weight:700; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .picker-sheet{ flex:3 1 0; min-height:0; border-top:1px solid var(--line); background:var(--bg); display:flex; flex-direction:column; padding:.8rem 1rem; gap:.6rem; }
+  .tabs{ display:flex; gap:1.1rem; flex:none; }
+  .tabs button{ border:none; background:none; padding:.2rem 0; font-size:.86rem; font-weight:700; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; }
   .tabs button.active{ color:var(--ink); border-bottom-color:var(--accent); }
 
-  .option-list{ display:flex; flex-direction:column; gap:.5rem; }
-  .option-row{ display:flex; align-items:center; gap:.8rem; padding:.6rem .7rem; border-radius:10px; border:1px solid var(--line); cursor:pointer; background:var(--bg); }
-  .option-row.selected{ border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--bg)); }
-  .option-row .swatch-dot{ width:26px; height:26px; border-radius:50%; flex:none; border:1px solid var(--line); }
-  .option-row .shape-icon{ width:26px; height:26px; border-radius:6px; flex:none; border:1.5px solid var(--ink); opacity:.75; }
-  .option-row .thumb{ width:38px; height:28px; object-fit:contain; flex:none; background:#fff; border-radius:6px; border:1px solid var(--line); }
-  .option-row .label{ flex:1; font-weight:600; font-size:.88rem; }
-  .option-row .price{ font-size:.8rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .wheel-row{ flex:1; min-height:0; display:flex; align-items:center; gap:.7rem; overflow-x:auto; scroll-snap-type:x proximity; padding:.2rem .1rem .5rem; }
+  .wheel-chip{
+    flex:none; scroll-snap-align:center; display:flex; flex-direction:column; align-items:center; gap:.3rem;
+    cursor:pointer; opacity:.75; transition:opacity .15s, transform .15s;
+  }
+  .wheel-chip:hover{ opacity:1; }
+  .wheel-chip.selected{ opacity:1; transform:translateY(-2px); }
+  .wheel-chip .wheel-thumb{
+    width:58px; height:58px; border-radius:50%; border:2px solid var(--line); background:#fff;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  .wheel-chip.selected .wheel-thumb{ border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .wheel-chip .wheel-thumb img{ width:100%; height:100%; object-fit:contain; }
+  .wheel-chip .wheel-thumb.swatch-dot{ border-radius:50%; }
+  .wheel-chip .wheel-label{ font-size:.68rem; font-weight:600; color:var(--muted); white-space:nowrap; }
+  .wheel-chip.selected .wheel-label{ color:var(--ink); }
+  .wheel-chip .wheel-price{ font-size:.62rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .action-row{ display:flex; gap:.6rem; flex:none; }
+  .action-row button{ flex:1; min-width:0; padding:.65rem .7rem; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-weight:700; font-size:.8rem; cursor:pointer; }
+  .action-row button.primary{ background:var(--accent); color:#fff; border-color:transparent; }
+  .action-row button.primary:hover{ background:var(--accent-strong); }
 
   /* ---- story ---- */
   section{ padding-block:2.8rem; border-top:1px solid var(--line); }
@@ -141,34 +163,39 @@
 
   <div class="studio-grid">
     <div class="stage-card">
-      <div class="stage" id="previewStage">
-        <canvas id="previewCanvas" width="480" height="360"></canvas>
-      </div>
-      <div class="stage-toolbar">
-        <div class="pill-group" id="viewToggle">
-          <button data-view="voor" class="active">Voor</button>
-          <button data-view="zij">Zij</button>
+      <div class="preview-area">
+        <div class="preview-toolbar">
+          <div class="pill-group" id="lightToggle">
+            <button data-light="studio" class="active">Studio</button>
+            <button data-light="daylight">Daylight</button>
+            <button data-light="pearl">Pearl</button>
+          </div>
         </div>
-        <div class="pill-group" id="lightToggle">
-          <button data-light="studio" class="active">Studio</button>
-          <button data-light="daylight">Daylight</button>
-          <button data-light="pearl">Pearl</button>
+        <div class="stage-pair" id="previewStage">
+          <div class="stage-single" id="stageVoor">
+            <span class="angle-label">Voor</span>
+            <canvas id="previewCanvasVoor" width="360" height="360"></canvas>
+          </div>
+          <div class="stage-single" id="stageZij">
+            <span class="angle-label">Zij</span>
+            <canvas id="previewCanvasZij" width="360" height="360"></canvas>
+          </div>
         </div>
       </div>
-      <div class="action-row">
-        <button class="primary" id="tryOnBtn">Probeer Op</button>
-        <button id="resetBtn">Reset</button>
-        <button id="finishBtn">Finish Design</button>
-      </div>
-    </div>
 
-    <div class="options-card">
-      <div class="tabs" id="tabBar">
-        <button data-tab="montuur" class="active">Montuur</button>
-        <button data-tab="pootjes">Pootjes</button>
-        <button data-tab="materiaal">Materiaal</button>
+      <div class="picker-sheet">
+        <div class="tabs" id="tabBar">
+          <button data-tab="montuur" class="active">Montuur</button>
+          <button data-tab="pootjes">Pootjes</button>
+          <button data-tab="materiaal">Materiaal</button>
+        </div>
+        <div class="wheel-row" id="optionList"></div>
+        <div class="action-row">
+          <button class="primary" id="tryOnBtn">Probeer Op</button>
+          <button id="resetBtn">Reset</button>
+          <button id="finishBtn">Finish Design</button>
+        </div>
       </div>
-      <div class="option-list" id="optionList"></div>
     </div>
   </div>
 </div>
@@ -341,29 +368,35 @@ function drawTintedPhoto(ctx, img, w, h, color){
   return true;
 }
 
-/* ---------- configurator preview canvas ---------- */
-const previewCanvas = document.getElementById('previewCanvas');
-const pvctx = previewCanvas.getContext('2d');
-const previewStage = document.getElementById('previewStage');
+/* ---------- configurator preview: front + side canvases, drawn together ---------- */
+const previewCanvasVoor = document.getElementById('previewCanvasVoor');
+const previewCanvasZij = document.getElementById('previewCanvasZij');
+const pvctxVoor = previewCanvasVoor.getContext('2d');
+const pvctxZij = previewCanvasZij.getContext('2d');
+const stageVoor = document.getElementById('stageVoor');
+const stageZij = document.getElementById('stageZij');
+
+function drawOneAngle(canvas, ctx, montuur, src, color, fallbackDraw){
+  const img = loadMontuurImage(src);
+  const w = canvas.width, h = canvas.height;
+  const ok = drawTintedPhoto(ctx, img, w, h, color);
+  if(!ok){
+    ctx.clearRect(0,0,w,h);
+    fallbackDraw(ctx, w/2, h/2, 2.6, color);
+    img.onload = ()=>{ if(getMontuur(state.montuur)===montuur) drawPreview(); };
+  }
+}
 
 function drawPreview(){
   const color = getMateriaal(state.materiaal).hex;
   const montuur = getMontuur(state.montuur);
-  const src = state.view === 'voor' ? montuur.voor : montuur.zij;
-  const img = loadMontuurImage(src);
-  const w = previewCanvas.width, h = previewCanvas.height;
-
-  const ok = drawTintedPhoto(pvctx, img, w, h, color);
-  if(!ok){
-    // photo not loaded yet — draw once it arrives, and show the vector fallback meanwhile
-    pvctx.clearRect(0,0,w,h);
-    if(state.view === 'voor') drawGlassesFront(pvctx, w/2, h/2, 2.6, color);
-    else drawGlassesSide(pvctx, w/2-40, h/2, 2.6, color);
-    img.onload = ()=>{ if(getMontuur(state.montuur)===montuur) drawPreview(); };
-  }
+  drawOneAngle(previewCanvasVoor, pvctxVoor, montuur, montuur.voor, color, drawGlassesFront);
+  drawOneAngle(previewCanvasZij, pvctxZij, montuur, montuur.zij, color, drawGlassesSide);
 
   const bgVar = state.light === 'studio' ? '--stage-studio' : state.light === 'daylight' ? '--stage-daylight' : '--stage-pearl';
-  previewStage.style.background = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
+  const bg = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
+  stageVoor.style.background = bg;
+  stageZij.style.background = bg;
 }
 
 /* ---------- price + ref code ---------- */
@@ -374,8 +407,7 @@ function refresh(){
   document.getElementById('totalPrice').textContent = '€' + total;
 
   const matCode = state.materiaal.slice(0,2).toUpperCase();
-  const viewCode = state.view === 'voor' ? 'VR' : 'ZY';
-  document.getElementById('refCode').textContent = `Ref EW-${state.montuur}${state.pootje}-${matCode}${viewCode}00`;
+  document.getElementById('refCode').textContent = `Ref EW-${state.montuur}${state.pootje}-${matCode}VR00`;
 
   drawPreview();
   renderOptions();
@@ -400,44 +432,39 @@ function renderOptions(){
   else { items = MATERIALEN; selectedId = state.materiaal; isColor=true; }
 
   items.forEach(item=>{
-    const row = document.createElement('div');
-    row.className = 'option-row' + (item.id===selectedId ? ' selected' : '');
-    let marker;
+    const chip = document.createElement('div');
+    chip.className = 'wheel-chip' + (item.id===selectedId ? ' selected' : '');
+
+    const thumb = document.createElement('div');
+    thumb.className = 'wheel-thumb' + (isColor ? ' swatch-dot' : '');
     if(isColor){
-      marker = document.createElement('div');
-      marker.className = 'swatch-dot';
-      marker.style.background = item.hex;
+      thumb.style.background = item.hex;
     } else if(item.voor){
-      marker = document.createElement('img');
-      marker.className = 'thumb';
-      marker.src = item.voor;
-      marker.alt = item.label;
-    } else {
-      marker = document.createElement('div');
-      marker.className = 'shape-icon';
+      const img = document.createElement('img');
+      img.src = item.voor; img.alt = item.label;
+      thumb.appendChild(img);
     }
-    row.appendChild(marker);
-    const label = document.createElement('div'); label.className='label'; label.textContent = item.label;
-    const price = document.createElement('div'); price.className='price';
+    chip.appendChild(thumb);
+
+    const label = document.createElement('div'); label.className='wheel-label'; label.textContent = item.label;
+    const price = document.createElement('div'); price.className='wheel-price';
     price.textContent = item.price > 0 ? `+€${item.price}` : 'incl.';
-    row.appendChild(label); row.appendChild(price);
-    row.onclick = ()=>{
+    chip.appendChild(label); chip.appendChild(price);
+
+    chip.onclick = ()=>{
       if(state.tab==='montuur') state.montuur = item.id;
       else if(state.tab==='pootjes') state.pootje = item.id;
       else state.materiaal = item.id;
       refresh();
     };
-    list.appendChild(row);
+    list.appendChild(chip);
   });
+
+  const sel = list.querySelector('.wheel-chip.selected');
+  if(sel) sel.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
 }
 
-/* ---------- view / light toggles ---------- */
-document.getElementById('viewToggle').addEventListener('click', e=>{
-  const btn = e.target.closest('button[data-view]'); if(!btn) return;
-  state.view = btn.dataset.view;
-  document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active', b===btn));
-  refresh();
-});
+/* ---------- light toggle ---------- */
 document.getElementById('lightToggle').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-light]'); if(!btn) return;
   state.light = btn.dataset.light;
@@ -454,7 +481,6 @@ function showToast(msg){
 }
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   state = { montuur:1, pootje:'A', materiaal:'nachtblauw', view:'voor', light:'studio', tab:'montuur' };
-  document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active', b.dataset.view==='voor'));
   document.querySelectorAll('#lightToggle button').forEach(b=>b.classList.toggle('active', b.dataset.light==='studio'));
   document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('active', b.dataset.tab==='montuur'));
   refresh();
