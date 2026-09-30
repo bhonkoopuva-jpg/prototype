@@ -73,6 +73,7 @@
   .option-row.selected{ border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--bg)); }
   .option-row .swatch-dot{ width:26px; height:26px; border-radius:50%; flex:none; border:1px solid var(--line); }
   .option-row .shape-icon{ width:26px; height:26px; border-radius:6px; flex:none; border:1.5px solid var(--ink); opacity:.75; }
+  .option-row .thumb{ width:38px; height:28px; object-fit:contain; flex:none; background:#fff; border-radius:6px; border:1px solid var(--line); }
   .option-row .label{ flex:1; font-weight:600; font-size:.88rem; }
   .option-row .price{ font-size:.8rem; color:var(--muted); font-variant-numeric:tabular-nums; }
 
@@ -234,11 +235,20 @@
 <script>
 /* ---------- configuration data (from the real Frame Studio) ---------- */
 const MONTUREN = [
-  { id:1, label:'Montuur 1', price:45 },
-  { id:2, label:'Montuur 2', price:45 },
-  { id:3, label:'Montuur 3', price:45 },
-  { id:4, label:'Montuur 4', price:45 },
+  { id:1, label:'Montuur 1', price:45, voor:'assets/montuur1-voor.jpg', zij:'assets/montuur1-zij.jpg' },
+  { id:2, label:'Montuur 2', price:45, voor:'assets/montuur2-voor.jpg', zij:'assets/montuur2-zij.jpg' },
+  { id:3, label:'Montuur 3', price:45, voor:'assets/montuur3-voor.jpg', zij:'assets/montuur3-zij.jpg' },
+  { id:4, label:'Montuur 4', price:45, voor:'assets/montuur4-voor.jpg', zij:'assets/montuur4-zij.jpg' },
 ];
+function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
+const montuurImgCache = {};
+function loadMontuurImage(src){
+  if(montuurImgCache[src]) return montuurImgCache[src];
+  const img = new Image();
+  img.src = src;
+  montuurImgCache[src] = img;
+  return img;
+}
 const POOTJES = [
   { id:'A', label:'Pootje A', price:0 },
   { id:'B', label:'Pootje B', price:0 },
@@ -300,20 +310,58 @@ function drawGlassesSide(ctx, cx, cy, unitScale, color){
   ctx.restore();
 }
 
+/* ---- tint a real frame photo toward the selected material color ----
+   Keeps near-white background untouched, preserves luminance/texture (grain,
+   reflections) on the frame itself, and shifts its hue toward the target color.
+   This is an approximate live preview, not a photoreal material render. */
+function hexToRgb(hex){
+  const v = hex.replace('#','');
+  return [parseInt(v.slice(0,2),16), parseInt(v.slice(2,4),16), parseInt(v.slice(4,6),16)];
+}
+function drawTintedPhoto(ctx, img, w, h, color){
+  ctx.clearRect(0,0,w,h);
+  if(!img.complete || img.naturalWidth===0) return false;
+  // draw image centered, contained within the canvas
+  const scale = Math.min(w/img.naturalWidth, h/img.naturalHeight);
+  const dw = img.naturalWidth*scale, dh = img.naturalHeight*scale;
+  const dx = (w-dw)/2, dy = (h-dh)/2;
+  ctx.drawImage(img, dx, dy, dw, dh);
+  const [tr,tg,tb] = hexToRgb(color);
+  const frame = ctx.getImageData(dx, dy, Math.max(1,Math.round(dw)), Math.max(1,Math.round(dh)));
+  const d = frame.data;
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i], g=d[i+1], b=d[i+2];
+    if(r>235 && g>235 && b>235) continue; // leave the white background alone
+    const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+    d[i]   = tr*lum + r*0.18;
+    d[i+1] = tg*lum + g*0.18;
+    d[i+2] = tb*lum + b*0.18;
+  }
+  ctx.putImageData(frame, dx, dy);
+  return true;
+}
+
 /* ---------- configurator preview canvas ---------- */
 const previewCanvas = document.getElementById('previewCanvas');
 const pvctx = previewCanvas.getContext('2d');
 const previewStage = document.getElementById('previewStage');
 
 function drawPreview(){
-  pvctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
   const color = getMateriaal(state.materiaal).hex;
-  const cx = previewCanvas.width/2, cy = previewCanvas.height/2;
-  if(state.view === 'voor'){
-    drawGlassesFront(pvctx, cx, cy, 2.6, color);
-  } else {
-    drawGlassesSide(pvctx, cx-40, cy, 2.6, color);
+  const montuur = getMontuur(state.montuur);
+  const src = state.view === 'voor' ? montuur.voor : montuur.zij;
+  const img = loadMontuurImage(src);
+  const w = previewCanvas.width, h = previewCanvas.height;
+
+  const ok = drawTintedPhoto(pvctx, img, w, h, color);
+  if(!ok){
+    // photo not loaded yet — draw once it arrives, and show the vector fallback meanwhile
+    pvctx.clearRect(0,0,w,h);
+    if(state.view === 'voor') drawGlassesFront(pvctx, w/2, h/2, 2.6, color);
+    else drawGlassesSide(pvctx, w/2-40, h/2, 2.6, color);
+    img.onload = ()=>{ if(getMontuur(state.montuur)===montuur) drawPreview(); };
   }
+
   const bgVar = state.light === 'studio' ? '--stage-studio' : state.light === 'daylight' ? '--stage-daylight' : '--stage-pearl';
   previewStage.style.background = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
 }
@@ -354,9 +402,20 @@ function renderOptions(){
   items.forEach(item=>{
     const row = document.createElement('div');
     row.className = 'option-row' + (item.id===selectedId ? ' selected' : '');
-    const marker = document.createElement('div');
-    marker.className = isColor ? 'swatch-dot' : 'shape-icon';
-    if(isColor) marker.style.background = item.hex;
+    let marker;
+    if(isColor){
+      marker = document.createElement('div');
+      marker.className = 'swatch-dot';
+      marker.style.background = item.hex;
+    } else if(item.voor){
+      marker = document.createElement('img');
+      marker.className = 'thumb';
+      marker.src = item.voor;
+      marker.alt = item.label;
+    } else {
+      marker = document.createElement('div');
+      marker.className = 'shape-icon';
+    }
     row.appendChild(marker);
     const label = document.createElement('div'); label.className='label'; label.textContent = item.label;
     const price = document.createElement('div'); price.className='price';
