@@ -91,9 +91,14 @@
   .stage-mountains{ position:absolute; left:0; right:0; bottom:0; height:38%; opacity:.5; pointer-events:none; }
   .stage-pair{ position:absolute; inset:0; display:flex; padding:0 3%; }
   .stage-single{ position:relative; flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; }
-  .stage-single canvas{ flex:1 1 auto; min-height:0; width:100%; margin-top:auto; transition:transform .08s linear; transform-origin:50% 50%; cursor:zoom-in; }
+  .stage-single canvas{ flex:1 1 auto; min-height:0; width:100%; margin-top:auto; cursor:zoom-in; }
   .stage-single .angle-label{
     flex:none; margin:.4rem 0 auto; font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  }
+  .stage-single canvas.loupe{
+    position:absolute; flex:none; width:160px; height:160px; min-height:160px; margin-top:0;
+    border-radius:50%; border:3px solid var(--surface); box-shadow:0 8px 24px rgba(0,0,0,.28);
+    pointer-events:none; display:none; z-index:5; background:var(--surface);
   }
 
   .stage-controls{
@@ -186,10 +191,12 @@
         <div class="stage-single" id="stageVoor">
           <canvas id="previewCanvasVoor" width="360" height="360"></canvas>
           <span class="angle-label">Voor</span>
+          <canvas class="loupe" id="loupeVoor" width="300" height="300"></canvas>
         </div>
         <div class="stage-single" id="stageZij">
           <canvas id="previewCanvasZij" width="360" height="360"></canvas>
           <span class="angle-label">Zij</span>
+          <canvas class="loupe" id="loupeZij" width="300" height="300"></canvas>
         </div>
       </div>
       <div class="stage-controls">
@@ -553,29 +560,47 @@ function renderOptions(){
 const zoomRangeEl = document.getElementById('zoomRange');
 function applyZoom(canvas){
   const base = Number(zoomRangeEl.value) / 100;
-  const hover = canvas.dataset.hoverZoom ? 1.9 : 1;
-  canvas.style.transform = `scale(${base * hover})`;
+  canvas.style.transform = `scale(${base})`;
 }
 zoomRangeEl.addEventListener('input', ()=>{
   applyZoom(previewCanvasVoor);
   applyZoom(previewCanvasZij);
 });
-function setupHoverZoom(panel, canvas){
-  panel.addEventListener('mousemove', e=>{
-    const rect = panel.getBoundingClientRect();
-    const x = ((e.clientX-rect.left)/rect.width*100).toFixed(1);
-    const y = ((e.clientY-rect.top)/rect.height*100).toFixed(1);
-    canvas.style.transformOrigin = `${x}% ${y}%`;
-  });
-  panel.addEventListener('mouseenter', ()=>{ canvas.dataset.hoverZoom = '1'; applyZoom(canvas); });
-  panel.addEventListener('mouseleave', ()=>{
-    delete canvas.dataset.hoverZoom;
-    canvas.style.transformOrigin = '50% 50%';
-    applyZoom(canvas);
-  });
+
+/* ---- magnifier: a small round loupe that follows the cursor and shows a
+   zoomed-in crop of the image right under it, like a physical magnifying
+   glass, instead of scaling the whole preview ---- */
+function setupLoupe(panel, sourceCanvas, loupeCanvas){
+  const lctx = loupeCanvas.getContext('2d');
+  const MAG = 2.4; // how much bigger the loupe shows things vs. normal size
+  const loupeCss = 160; // matches the .loupe CSS width/height
+
+  function draw(e){
+    const srcRect = sourceCanvas.getBoundingClientRect();
+    const mx = e.clientX - srcRect.left, my = e.clientY - srcRect.top;
+    if(mx < 0 || my < 0 || mx > srcRect.width || my > srcRect.height){
+      loupeCanvas.style.display = 'none';
+      return;
+    }
+    const panelRect = panel.getBoundingClientRect();
+    loupeCanvas.style.display = 'block';
+    loupeCanvas.style.left = (e.clientX - panelRect.left - loupeCss/2) + 'px';
+    loupeCanvas.style.top = (e.clientY - panelRect.top - loupeCss/2) + 'px';
+
+    const pxPerCss = sourceCanvas.width / srcRect.width; // device px per CSS px
+    const deviceX = mx * pxPerCss, deviceY = my * pxPerCss;
+    const regionDevice = (loupeCss / MAG) * pxPerCss;
+    const sx = Math.max(0, Math.min(sourceCanvas.width - regionDevice, deviceX - regionDevice/2));
+    const sy = Math.max(0, Math.min(sourceCanvas.height - regionDevice, deviceY - regionDevice/2));
+
+    lctx.clearRect(0, 0, loupeCanvas.width, loupeCanvas.height);
+    lctx.drawImage(sourceCanvas, sx, sy, regionDevice, regionDevice, 0, 0, loupeCanvas.width, loupeCanvas.height);
+  }
+  panel.addEventListener('mousemove', draw);
+  panel.addEventListener('mouseleave', ()=>{ loupeCanvas.style.display = 'none'; });
 }
-setupHoverZoom(document.getElementById('stageVoor'), previewCanvasVoor);
-setupHoverZoom(document.getElementById('stageZij'), previewCanvasZij);
+setupLoupe(document.getElementById('stageVoor'), previewCanvasVoor, document.getElementById('loupeVoor'));
+setupLoupe(document.getElementById('stageZij'), previewCanvasZij, document.getElementById('loupeZij'));
 
 /* ---------- light toggle ---------- */
 document.getElementById('lightToggle').addEventListener('click', e=>{
