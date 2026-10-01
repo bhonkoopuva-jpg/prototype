@@ -272,56 +272,107 @@ const TEMPLE_LENGTH_MM = 140; // realistic adult temple length (135–145mm brie
 /* ---------- configuration data ----------
    Every montuur/pootje here is a real parametric 3D shape in millimeters,
    not a photo — so scale is physically meaningful now and the same model
-   can later drive an AR try-on without being rebuilt. These numbers are
-   not just visually estimated: assets/*.jpg were measured with a pixel
-   analysis pass (connected-component hole bounding boxes for lens
-   width/height ratio, per-column thickness + centerline-slope profiles
-   for the pootjes) to calibrate the proportions below, then cross-checked
-   against zoomed crops of the same photos. See the shape-building
-   functions for how each field maps back to what's visible. */
+   can later drive an AR try-on without being rebuilt. `lensContour` and
+   `curvePoints` below are NOT hand-fit formulas: they are actual traced
+   measurements from assets/*.jpg —
+     - lensContour: the lens-hole's own pixel silhouette, extracted with
+       OpenCV (threshold → enclosed-background connected components →
+       convex hull → polygon simplify), then the left/right lens contours
+       were polar-resampled about their own centroid and averaged
+       (mirroring one onto the other) into one canonical symmetric shape,
+       converted to mm.
+     - curvePoints: the pootje's own centerline, extracted by scanning
+       every column of the side-profile photo for the temple's top/bottom
+       edge and averaging, smoothed, converted to mm using the 140mm
+       temple length as the pixel→mm calibration.
+   What a single 2D photo genuinely cannot give us — and is still a
+   judgment call, not a measurement — is called out per field below:
+   absolute scale (no ruler in the photo; anchored to the brief's
+   realistic adult-glasses range), frame depth and lens curvature (not
+   visible in a flat front photo at all), temple outward flare (not
+   visible in a flat side photo), and the pootje's width-taper profile
+   (the photo's raw width signal is contaminated by perspective
+   foreshortening on the curved back half, so it's simplified to a
+   straight taper rather than taken literally). */
 const MONTUREN = [
-  // Dodoma (green-voor.jpg): thin wire metal frame. Measured inner-lens
-  // hole aspect ratio (pixel bbox of the enclosed lens opening) is
-  // ≈1.16:1 (462x399px) — rounder than the previous 1.27:1 guess, hence
-  // the taller lensHeight below. Soft, slightly-angular round shape with
-  // a flatter brow and a fuller lower edge (chinFullness).
+  // Dodoma = green-voor.jpg. lensContour is the measured, symmetric-
+  // averaged lens-hole silhouette (47mm wide at the calibrated scale —
+  // see the module header above for why that absolute number is still an
+  // assumption, not a measurement). rimBorder/rimDepth/bridgeWidth are
+  // not visible as a separate, isolatable contour in the photo at this
+  // resolution, so those stay informed estimates (very thin wire, as the
+  // photo clearly shows) rather than measurements.
   { id:1, label:'Dodoma', price:45, shape:'round', finish:'metal',
-    lensWidth:50, lensHeight:45, bridgeWidth:20, rimBorder:1.5, rimDepth:2.6,
-    roundness:2.5, browFlatten:0.14, chinFullness:0.07 },
-  // Kuala Lumpur (tortoise-voor.jpg): thick acetate, soft square lens.
-  // Measured inner-lens aspect ratio ≈1.31:1 (454x348px) — more elongated
-  // than the previous 1.20:1 guess, hence wider/shorter below. Higher
-  // roundness exponent = flatter sides with gently rounded corners,
-  // matching the zoomed crop's fairly rectangular silhouette.
+    bridgeWidth:20, rimBorder:1.5, rimDepth:2.6,
+    lensContour:[[23.241,-0],[22.423,-2.952],[21.635,-5.797],[20.08,-8.317],[18.52,-10.693],[16.984,-13.032],[15.19,-15.19],[12.983,-16.92],[10.771,-18.655],[8.077,-19.499],[5.374,-20.056],[2.685,-20.397],[0,-20.277],[-2.653,-20.151],[-5.315,-19.836],[-8.068,-19.478],[-10.739,-18.601],[-13.249,-17.267],[-15.63,-15.63],[-17.465,-13.402],[-19.259,-11.119],[-21.121,-8.749],[-22.11,-5.924],[-22.9,-3.015],[-23.551,-0],[-23.471,3.09],[-23.389,6.267],[-23.234,9.624],[-22.195,12.814],[-20.474,15.71],[-17.907,17.907],[-14.585,19.008],[-11.478,19.88],[-8.338,20.129],[-5.424,20.242],[-2.679,20.348],[-0,20.452],[2.665,20.243],[5.317,19.843],[8.049,19.431],[10.965,18.991],[13.825,18.017],[16.738,16.738],[19.653,15.08],[21.735,12.549],[23.049,9.547],[23.256,6.231],[23.449,3.087]] },
+  // Kuala Lumpur = tortoise-voor.jpg. Same measurement process; lensContour
+  // is 42.4mm wide at the calibrated scale.
   { id:3, label:'Kuala Lumpur', price:45, shape:'square', finish:'acetate',
-    lensWidth:52, lensHeight:42, bridgeWidth:17, rimBorder:4.8, rimDepth:6.2,
-    roundness:5.2, browFlatten:0, chinFullness:0 },
+    bridgeWidth:17, rimBorder:4.8, rimDepth:6.2,
+    lensContour:[[20.441,-0],[19.611,-2.582],[18.73,-5.019],[17.44,-7.224],[16.143,-9.32],[14.502,-11.128],[12.72,-12.72],[10.66,-13.892],[8.602,-14.899],[6.473,-15.628],[4.278,-15.967],[2.146,-16.297],[0,-16.354],[-2.149,-16.32],[-4.359,-16.27],[-6.589,-15.906],[-8.957,-15.515],[-11.403,-14.861],[-13.884,-13.884],[-15.963,-12.249],[-17.927,-10.35],[-19.03,-7.882],[-19.896,-5.331],[-20.385,-2.684],[-20.735,-0],[-21.022,2.768],[-21.225,5.687],[-21.169,8.769],[-20.359,11.754],[-18.557,14.239],[-15.525,15.525],[-12.438,16.209],[-9.401,16.283],[-6.771,16.348],[-4.396,16.406],[-2.167,16.46],[-0,16.307],[2.116,16.075],[4.245,15.842],[6.462,15.599],[8.855,15.337],[11.313,14.743],[13.935,13.935],[16.95,13.006],[19.633,11.335],[21.175,8.771],[21.167,5.672],[20.918,2.754]] },
 ];
 function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
 
 const POOTJES = [
-  // Dodoma (green-pootje.jpg / green-zij-montuur.jpg): thin flat metal
-  // temple, essentially straight for most of its length. A per-column
-  // centerline-slope measurement of the photo confirms the bend genuinely
-  // starts late (slope only breaks from its ~0.08 baseline past roughly
-  // 80% of the length) and the total vertical drop implied by the photo
-  // (~16mm) matches bendAmount+the baseline slope almost exactly — no
-  // taper: the wire reads the same width along the whole arm.
+  // Dodoma = green-pootje.jpg (measured against green-zij-montuur.jpg
+  // too). curvePoints is the actual traced centerline, hinge to tip, at
+  // 140mm calibrated length — not a bend-start/bend-power formula.
+  // thickness/width stay informed estimates (the photo shows the flat
+  // face, not the true edge-on thickness, and the raw width signal was
+  // too noisy past the hinge clip to trust point-by-point).
   { id:'A', label:'Dodoma', price:0, style:'thin',
     thickness:2.0, tipThickness:2.0, width:2.7, flare:1.5,
-    bendStart:0.83, bendAmount:15, bendPower:2.3 },
-  // Kuala Lumpur (tortoise-pootje.jpg): thick acetate at the hinge,
-  // tapering down to a thinner tip. The same slope measurement shows this
-  // one's bend breaking from baseline much earlier (~45-55% along the
-  // length) — a long comfort curve, not a late hook — confirming the
-  // early bendStart; the taper ratio was moderated after measuring the
-  // photo's actual width profile (perspective foreshortening on the
-  // curved back half of that photo exaggerates taper if read literally).
+    curvePoints:[[0,-0],[-4.65,-1.84],[-7.05,-2.01],[-11.85,-2.27],[-16.5,-2.56],[-18.9,-2.76],[-23.71,-3.13],[-28.35,-3.52],[-30.76,-3.71],[-35.56,-4.09],[-40.21,-4.47],[-45.01,-4.86],[-47.41,-5.05],[-52.06,-5.4],[-56.86,-5.76],[-59.27,-5.96],[-63.91,-6.33],[-68.72,-6.74],[-71.12,-6.96],[-75.93,-7.4],[-80.57,-7.8],[-82.97,-8],[-87.78,-8.41],[-92.43,-8.78],[-94.83,-9],[-99.63,-9.47],[-104.28,-10.01],[-109.08,-10.23],[-111.49,-10.38],[-116.13,-11.13],[-120.94,-11.81],[-123.34,-12.35],[-127.99,-13.69],[-132.79,-15.99],[-135.19,-17.67],[-140,-18.84]] },
+  // Kuala Lumpur = tortoise-pootje.jpg. Note the measured tip drop here
+  // (~39mm) is notably larger than Dodoma's (~19mm) — plausible for a
+  // longer comfort-cable curve, but also exactly the kind of number a
+  // single side-profile photo can exaggerate if the temple isn't shot
+  // perfectly flat to the camera. Used as measured per this request's
+  // instruction to prioritize the photo over my own judgment, but worth
+  // a visual sanity-check on the live model.
   { id:'C', label:'Kuala Lumpur', price:0, style:'bold',
     thickness:4.2, tipThickness:2.0, width:5.6, flare:2.5,
-    bendStart:0.52, bendAmount:12, bendPower:1.3 },
+    curvePoints:[[0,-0],[-4.72,-1.6],[-7.01,-1.71],[-11.86,-1.93],[-16.57,-2.36],[-18.86,-3.14],[-23.72,-3.28],[-28.43,-3.25],[-30.72,-3.27],[-35.57,-3.36],[-40.29,-3.5],[-45,-3.78],[-47.43,-3.94],[-52.15,-4.32],[-56.86,-4.79],[-59.29,-5.08],[-64,-5.73],[-68.72,-6.46],[-71.15,-6.85],[-75.86,-7.05],[-80.58,-7.43],[-83,-7.69],[-87.72,-8.31],[-92.44,-9.18],[-94.86,-9.75],[-99.58,-11.24],[-104.29,-13.36],[-109.14,-16.62],[-111.43,-18.61],[-116.15,-23.55],[-121,-27.04],[-123.29,-28.56],[-128.01,-31.68],[-132.86,-35.01],[-135.15,-36.92],[-140,-39.48]] },
 ];
 function getPootje(id){ return POOTJES.find(p=>p.id===id); }
+
+// bbox of a flat [x,y] point list — used wherever code needs the overall
+// width/height of a measured contour (replaces the old lensWidth/
+// lensHeight config fields, which are now derived from lensContour itself
+// so they can never drift out of sync with the actual measured shape).
+function contourBounds(points){
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for(const [x,y] of points){
+    if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
+  }
+  return { minX,maxX,minY,maxY, w:maxX-minX, h:maxY-minY };
+}
+
+// offset a (roughly convex, as ours are post-convexHull) closed polygon
+// outward by `dist` mm, via each vertex's averaged adjacent-edge normal —
+// used to build the rim's OUTER boundary from the measured lensContour,
+// which is the rim's INNER boundary (only the inner edge — where the
+// glass sits — is cleanly isolatable from the photo; the outer edge is
+// reconstructed from it plus the rim thickness rather than traced
+// separately).
+function offsetContour(points, dist){
+  const n = points.length;
+  const out = [];
+  for(let i=0;i<n;i++){
+    const [px,py] = points[(i-1+n)%n], [cx,cy] = points[i], [nx,ny] = points[(i+1)%n];
+    const e1x=cx-px, e1y=cy-py, e2x=nx-cx, e2y=ny-cy;
+    const len1=Math.hypot(e1x,e1y)||1, len2=Math.hypot(e2x,e2y)||1;
+    // outward normal of each edge — our traced contours run clockwise
+    // (verified via shoelace sign), so the outward normal of an edge
+    // (ex,ey) is (-ey,ex)
+    const n1x=-e1y/len1, n1y=e1x/len1, n2x=-e2y/len2, n2y=e2x/len2;
+    let avgx=n1x+n2x, avgy=n1y+n2y;
+    const avgLen=Math.hypot(avgx,avgy)||1;
+    avgx/=avgLen; avgy/=avgLen;
+    out.push([cx+avgx*dist, cy+avgy*dist]);
+  }
+  return out;
+}
 
 const MATERIALEN = [
   { id:'parelwit',   label:'Parelwit',   price:10, hex:'#F2EEE6' },
@@ -373,39 +424,27 @@ function drawGlassesFront(ctx, cx, cy, unitScale, color){
    flat sprite: every part is real extruded/tubed 3D geometry, so it can
    be viewed, lit and rotated from any angle, and reused as-is for a
    future AR try-on. ====================================================================== */
-// lens outline as a superellipse (|x/a|^n + |y/b|^n = 1), traced
-// specifically to match each montuur's reference photo rather than a
-// generic rounded rectangle: a low `n` (Dodoma, ~2.3) gives the soft,
-// slightly-angular round shape in green-voor.jpg; a high `n` (Kuala
-// Lumpur, ~4.6) gives the flatter-sided soft square in tortoise-voor.jpg.
-// `browFlatten` compresses the upper half toward a straighter brow line,
-// `chinFullness` expands the lower half slightly for a fuller bottom edge
-// — both visible in Dodoma's photo (flatter brow, rounder chin) but not
-// something a pure (symmetric) superellipse produces on its own.
-function lensOutlineShape(w, h, n, browFlatten, chinFullness){
-  const segments = 72;
-  const a = w/2, b = h/2;
+// build a THREE.Shape by tracing a measured [x,y] point list directly
+// (straight segments between consecutive points — the points are already
+// densely sampled, ~36-48 of them, from the real photo contour, so no
+// formula/curve-fit is used here at all).
+function shapeFromContour(points){
   const s = new THREE.Shape();
-  for(let i=0;i<=segments;i++){
-    const t = (i/segments)*Math.PI*2;
-    const ct = Math.cos(t), st = Math.sin(t);
-    const x = Math.sign(ct) * Math.pow(Math.abs(ct), 2/n) * a;
-    let y = Math.sign(st) * Math.pow(Math.abs(st), 2/n) * b;
-    if(browFlatten && st > 0) y *= (1 - browFlatten);
-    if(chinFullness && st < 0) y *= (1 + chinFullness);
-    if(i===0) s.moveTo(x,y); else s.lineTo(x,y);
-  }
+  points.forEach(([x,y], i) => { if(i===0) s.moveTo(x,y); else s.lineTo(x,y); });
   s.closePath();
   return s;
 }
 
-// one lens rim (a ring: outer lens outline minus a slightly smaller inner
-// outline, extruded front-to-back) — symmetric about its own local origin,
+// one lens rim (a ring: outer boundary minus the measured inner lens-hole
+// contour, extruded front-to-back) — symmetric about its own local origin,
 // so the left lens is just a mirrored *position*, never a mirrored mesh.
+// The outer boundary is the measured contour offset outward by rimBorder
+// (see offsetContour above for why — only the inner edge is cleanly
+// traceable from the photo).
 function buildLensRimGeometry(montuur){
-  const { lensWidth:w, lensHeight:h, rimBorder:b, rimDepth:d, roundness:n, browFlatten:bf, chinFullness:cf } = montuur;
-  const outer = lensOutlineShape(w, h, n, bf, cf);
-  const inner = lensOutlineShape(Math.max(2,w-b*2), Math.max(2,h-b*2), n, bf, cf);
+  const { lensContour, rimBorder:b, rimDepth:d } = montuur;
+  const outer = shapeFromContour(offsetContour(lensContour, b));
+  const inner = shapeFromContour(lensContour);
   outer.holes.push(inner);
   const geo = new THREE.ExtrudeGeometry(outer, {
     depth:d, bevelEnabled:true, bevelThickness:0.35, bevelSize:0.3, bevelSegments:2, curveSegments:20,
@@ -414,23 +453,23 @@ function buildLensRimGeometry(montuur){
   return geo;
 }
 
-// the actual lens glass filling the rim's inner opening — exactly the rim's
-// own inner contour (so there's no gap/overlap between glass and rim),
-// extruded thin and centered in the rim's own depth. Always clear optical
-// glass: the materiaal picker colors the frame, never the lens itself.
+// the actual lens glass filling the rim's inner opening — exactly the
+// measured inner contour (so there's no gap/overlap between glass and
+// rim), extruded thin and centered in the rim's own depth. Always clear
+// optical glass: the materiaal picker colors the frame, never the lens.
 function buildLensGlassGeometry(montuur){
-  const { lensWidth:w, lensHeight:h, rimBorder:b, roundness:n, browFlatten:bf, chinFullness:cf } = montuur;
-  const innerW = Math.max(2, w-b*2), innerH = Math.max(2, h-b*2);
-  const shape = lensOutlineShape(innerW, innerH, n, bf, cf);
+  const shape = shapeFromContour(montuur.lensContour);
   const geo = new THREE.ExtrudeGeometry(shape, { depth:0.9, bevelEnabled:false, curveSegments:20 });
   geo.translate(0, 0, -0.45);
   return geo;
 }
 
-// bridge: a short arched tube between the two lenses' inner-top edges
+// bridge: a short arched tube between the two lenses' inner-top edges.
+// topY comes from the measured contour's own topmost point (not a
+// formula against lensHeight, which no longer exists as a separate field).
 function buildBridgeGeometry(montuur){
   const halfB = montuur.bridgeWidth/2;
-  const topY = montuur.lensHeight/2 - montuur.rimBorder - 3;
+  const topY = contourBounds(montuur.lensContour).maxY - 2;
   const curve = new THREE.QuadraticBezierCurve3(
     new THREE.Vector3(-halfB, topY, 0),
     new THREE.Vector3(0, topY+3.2, 0),
@@ -442,8 +481,11 @@ function buildBridgeGeometry(montuur){
 // hinge stub: carries the rim's outer edge out to the STANDARD hinge X —
 // the literal, physical connector every pootje plugs into, built from the
 // same shared HINGE constants rather than anything montuur-specific.
+// lensEdgeX now comes from the measured (and rim-offset) contour's own
+// bounding box rather than a stored lensWidth field.
 function buildHingeStubGeometry(montuur){
-  const lensEdgeX = montuur.bridgeWidth/2 + montuur.lensWidth;
+  const outerW = contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).w;
+  const lensEdgeX = montuur.bridgeWidth/2 + outerW;
   const len = Math.max(1.5, (HINGE.x + 1.2) - lensEdgeX);
   // z-depth must reach past HINGE.z (where every temple's local origin sits)
   // with real overlap, not just up to the rim's own front-to-back depth —
@@ -493,25 +535,16 @@ function buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn){
 // pootje (temple arm): starts exactly at local origin (the hinge pivot),
 // runs backward (-Z) with an outward flare and a downward comfort bend —
 // generated directly mirrored by `side` (1=right, -1=left) so normals are
-// never flipped via negative scale. Every shape parameter (flare, where
-// the bend starts, how sharp it is, how much the radius tapers) comes from
-// the pootje's own config, tuned per reference photo rather than shared
-// defaults — see the POOTJES array above for what each value reconstructs.
+// never flipped via negative scale. The (z,y) path itself is the measured
+// curvePoints from the photo (see POOTJES above) — not a bend-formula —
+// run backward from the hinge pivot at local origin; `flare` is the one
+// part of this curve a side-profile photo can't show at all (outward X
+// splay only shows in a front/top view), so it stays a straight ramp.
 function buildTempleGeometry(pootje, side){
-  const L = TEMPLE_LENGTH_MM;
-  const segs = 48, bendStart = pootje.bendStart;
-  const pts = [];
-  for(let i=0;i<=segs;i++){
-    const f = i/segs;
-    const z = -f*L;
-    const x = side * f*pootje.flare;
-    let y = -f*1.2; // gentle overall downward slope
-    if(f > bendStart){
-      const bf = (f-bendStart)/(1-bendStart);
-      y -= Math.pow(bf, pootje.bendPower) * pootje.bendAmount; // comfort bend behind the ear
-    }
-    pts.push(new THREE.Vector3(x,y,z));
-  }
+  const pts = pootje.curvePoints.map(([z,y]) => {
+    const f = Math.abs(z) / TEMPLE_LENGTH_MM;
+    return new THREE.Vector3(side * f * pootje.flare, y, z);
+  });
   const curve = new THREE.CatmullRomCurve3(pts);
   const radiusFn = t => THREE.MathUtils.lerp(pootje.thickness/2, pootje.tipThickness/2, Math.min(1, t/0.9));
   const geo = buildTaperedTubeGeometry(curve, 56, 10, radiusFn);
@@ -532,7 +565,7 @@ function buildGlassesGroup(montuur, pootje, material, lensMaterial){
   const templeGeoR = buildTempleGeometry(pootje, 1);
   const templeGeoL = buildTempleGeometry(pootje, -1);
 
-  const lensX = montuur.bridgeWidth/2 + montuur.lensWidth/2;
+  const lensX = montuur.bridgeWidth/2 + contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).w/2;
   [1,-1].forEach(side=>{
     const rim = new THREE.Mesh(rimGeo, material);
     rim.position.x = side*lensX;
@@ -703,7 +736,7 @@ function rebuildGlasses(){
   // one footprint under the glasses rather than a fixed decal
   const footprintW = HINGE.x*2*0.78;
   shadowMesh.scale.set(footprintW, footprintW*0.4, 1);
-  shadowMesh.position.set(0, -montuur.lensHeight/2 - 7, -TEMPLE_LENGTH_MM*0.1);
+  shadowMesh.position.set(0, contourBounds(montuur.lensContour).minY - 7, -TEMPLE_LENGTH_MM*0.1);
 }
 
 function resizeRenderer(){
