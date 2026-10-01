@@ -25,78 +25,88 @@
   button{ font-family:inherit; }
 
   nav.top{ flex:none; z-index:20; background:var(--bg); border-bottom:1px solid var(--line); }
-  nav.top .shell{ display:flex; align-items:center; justify-content:space-between; padding-block:.65rem; gap:1rem; flex-wrap:wrap; }
-  .brand{ font-family:var(--f-display); font-weight:700; font-size:1.15rem; text-decoration:none; }
-  .nav-btn{
-    font-family:var(--f-body); font-size:.82rem; font-weight:700; padding:.5rem 1.1rem;
-    border-radius:999px; border:1px solid var(--accent); background:transparent; color:var(--accent);
-    cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem;
+  nav.top .shell{ display:flex; align-items:center; justify-content:space-between; padding-block:.7rem; gap:1rem; flex-wrap:wrap; }
+  .brand-block{ display:flex; align-items:center; gap:.6rem; }
+  .brand-icon{
+    width:38px; height:38px; border-radius:50%; background:var(--olive); color:#fff;
+    display:flex; align-items:center; justify-content:center; flex:none;
   }
-  .nav-btn:hover{ background:var(--accent); color:#fff; }
+  .brand-icon svg{ width:19px; height:19px; }
+  .brand-name{ font-family:var(--f-display); font-weight:700; font-size:1.1rem; line-height:1.15; }
+  .brand-sub{ font-size:.66rem; font-weight:700; letter-spacing:.08em; color:var(--muted); text-transform:uppercase; }
+
+  .nav-right{ display:flex; align-items:center; gap:1.3rem; flex-wrap:wrap; }
+  .meta-block{ text-align:right; line-height:1.2; }
+  .meta-label{ font-size:.62rem; font-weight:700; letter-spacing:.08em; color:var(--muted); text-transform:uppercase; }
+  .meta-value{ font-family:ui-monospace,monospace; font-size:.78rem; color:var(--ink); }
+  .meta-value.total{ font-family:var(--f-display); font-weight:700; font-size:1.15rem; }
+
+  .btn-outline, .btn-solid{
+    font-family:var(--f-body); font-size:.72rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    padding:.6rem 1.1rem; border-radius:999px; cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:.4rem;
+  }
+  .btn-outline{ border:1px solid var(--line); background:transparent; color:var(--ink); }
+  .btn-outline:hover{ border-color:var(--accent); color:var(--accent); }
+  .btn-solid{ border:1px solid var(--olive); background:var(--olive); color:#fff; }
+  .btn-solid:hover{ background:#73815f; }
 
   main{ flex:1; min-height:0; display:flex; flex-direction:column; }
 
   /* ---- Frame Studio configurator: fills the remaining viewport, no page scroll ---- */
-  .studio{ flex:1; min-height:0; display:flex; flex-direction:column; padding-block:.9rem; }
-  .studio-head{ flex:none; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:1rem; margin-bottom:.8rem; }
-  .studio-head h1{ font-family:var(--f-display); font-weight:700; font-size:1.5rem; margin:0 0 .2rem; }
-  .studio-head .collection{ color:var(--muted); font-size:.85rem; }
-  .studio-meta{ text-align:right; font-size:.8rem; color:var(--muted); }
-  .studio-meta .ref{ font-family:ui-monospace,monospace; font-size:.78rem; }
-  .studio-meta .total{ font-family:var(--f-display); font-weight:700; font-size:1.4rem; color:var(--ink); }
+  .studio{ flex:1; min-height:0; display:flex; flex-direction:column; gap:.7rem; padding-block:.8rem; }
 
-  .studio-grid{ flex:1; min-height:0; display:flex; }
-  .stage-card{
-    background:var(--surface); border:1px solid var(--line); border-radius:20px; overflow:hidden;
-    display:flex; flex-direction:column; flex:1; min-height:0;
+  /* -- option rows: Montuur / Pootjes / Materiaal always visible, stacked -- */
+  .option-rows{ flex:none; display:flex; flex-direction:column; gap:.5rem; }
+  .option-row{
+    display:flex; align-items:center; gap:1rem; background:var(--surface); border:1px solid var(--line);
+    border-radius:14px; padding:.55rem .8rem;
   }
-  .preview-area{ flex:7 1 0; min-height:0; padding:1rem 1rem 0; display:flex; flex-direction:column; }
-  .preview-toolbar{ display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:.7rem; flex-wrap:wrap; }
-  .zoom-group{ display:flex; align-items:center; gap:.55rem; color:var(--muted); }
-  .zoom-group svg{ flex:none; width:16px; height:16px; stroke:var(--muted); }
-  .zoom-group input[type=range]{
-    width:120px; accent-color:var(--accent); cursor:pointer;
+  .option-row-label{
+    flex:none; width:70px; font-size:.68rem; font-weight:700; letter-spacing:.07em; color:var(--muted); text-transform:uppercase;
   }
-  .pill-group{ display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:.2rem; gap:.15rem; }
-  .pill-group button{ border:none; background:transparent; padding:.4rem .85rem; border-radius:999px; font-size:.78rem; font-weight:600; cursor:pointer; color:var(--muted); }
-  .pill-group button.active{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
-
-  .stage-pair{ flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
-  .stage-single{ position:relative; border-radius:14px; overflow:hidden; transition:background .25s; min-width:0; }
-  .stage-single canvas{ position:absolute; inset:0; width:100%; height:100%; }
-  .stage-single .angle-label{
-    position:absolute; top:.6rem; left:.7rem; font-size:.7rem; font-weight:700; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--muted); background:color-mix(in srgb, var(--surface) 75%, transparent);
-    padding:.2rem .55rem; border-radius:999px; z-index:2;
-  }
-
-  .picker-sheet{ flex:3 1 0; min-height:0; border-top:1px solid var(--line); background:var(--bg); display:flex; flex-direction:column; padding:.8rem 1rem; gap:.6rem; }
-  .tabs{ display:flex; gap:1.1rem; flex:none; }
-  .tabs button{ border:none; background:none; padding:.2rem 0; font-size:.86rem; font-weight:700; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; }
-  .tabs button.active{ color:var(--ink); border-bottom-color:var(--accent); }
-
-  .wheel-row{ flex:1; min-height:0; display:flex; align-items:center; gap:.7rem; overflow-x:auto; scroll-snap-type:x proximity; padding:.2rem .1rem .5rem; }
+  .wheel-row{ flex:1; min-width:0; display:flex; align-items:center; gap:.6rem; overflow-x:auto; scroll-snap-type:x proximity; padding:.15rem; }
   .wheel-chip{
-    flex:none; scroll-snap-align:center; display:flex; flex-direction:column; align-items:center; gap:.3rem;
-    cursor:pointer; opacity:.75; transition:opacity .15s, transform .15s;
+    flex:none; scroll-snap-align:start; display:flex; align-items:center; gap:.55rem; cursor:pointer;
+    padding:.4rem .8rem .4rem .4rem; border-radius:999px; border:1px solid var(--line); background:var(--bg);
+    transition:border-color .15s, background .15s;
   }
-  .wheel-chip:hover{ opacity:1; }
-  .wheel-chip.selected{ opacity:1; transform:translateY(-2px); }
+  .wheel-chip:hover{ border-color:var(--accent); }
+  .wheel-chip.selected{ border-color:var(--olive); background:color-mix(in srgb, var(--olive) 10%, var(--bg)); }
   .wheel-chip .wheel-thumb{
-    width:58px; height:58px; border-radius:50%; border:2px solid var(--line); background:#fff;
-    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    width:34px; height:34px; border-radius:50%; background:#fff; border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; overflow:hidden; flex:none;
   }
-  .wheel-chip.selected .wheel-thumb{ border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
   .wheel-chip .wheel-thumb img{ width:100%; height:100%; object-fit:contain; }
   .wheel-chip .wheel-thumb.swatch-dot{ border-radius:50%; }
-  .wheel-chip .wheel-label{ font-size:.68rem; font-weight:600; color:var(--muted); white-space:nowrap; }
-  .wheel-chip.selected .wheel-label{ color:var(--ink); }
-  .wheel-chip .wheel-price{ font-size:.62rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .wheel-chip .wheel-label{ font-size:.78rem; font-weight:600; color:var(--ink); white-space:nowrap; }
+  .wheel-chip .wheel-price{ font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 
-  .action-row{ display:flex; gap:.6rem; flex:none; }
-  .action-row button{ flex:1; min-width:0; padding:.65rem .7rem; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-weight:700; font-size:.8rem; cursor:pointer; }
-  .action-row button.primary{ background:var(--accent); color:#fff; border-color:transparent; }
-  .action-row button.primary:hover{ background:var(--accent-strong); }
+  /* -- preview stage -- */
+  .stage-card{
+    position:relative; background:linear-gradient(180deg, var(--stage-studio), color-mix(in srgb, var(--stage-studio) 70%, var(--olive)));
+    border:1px solid var(--line); border-radius:20px; overflow:hidden; flex:1; min-height:0;
+    transition:background .25s;
+  }
+  .stage-mountains{ position:absolute; left:0; right:0; bottom:0; height:38%; opacity:.5; pointer-events:none; }
+  .stage-pair{ position:absolute; inset:0; display:flex; padding:0 3%; }
+  .stage-single{ position:relative; flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; }
+  .stage-single canvas{ flex:1 1 auto; min-height:0; width:100%; margin-top:auto; }
+  .stage-single .angle-label{
+    flex:none; margin:.4rem 0 auto; font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  }
+
+  .stage-controls{
+    position:absolute; left:50%; bottom:1.1rem; transform:translateX(-50%); z-index:3;
+    display:flex; align-items:center; gap:.9rem; background:color-mix(in srgb, var(--surface) 88%, transparent);
+    border:1px solid var(--line); border-radius:999px; padding:.4rem .6rem .4rem 1rem; backdrop-filter:blur(6px);
+  }
+  .zoom-group{ display:flex; align-items:center; gap:.55rem; color:var(--muted); }
+  .zoom-group svg{ flex:none; width:16px; height:16px; stroke:var(--muted); }
+  .zoom-group input[type=range]{ width:110px; accent-color:var(--olive); cursor:pointer; }
+  .pill-group{ display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:.2rem; gap:.15rem; }
+  .pill-group button{ border:none; background:transparent; padding:.4rem .85rem; border-radius:999px; font-size:.72rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; cursor:pointer; color:var(--muted); }
+  .pill-group button.active{ background:var(--olive); color:#fff; }
 
   /* ---- live try-on modal ---- */
   .tryon-modal{
@@ -129,62 +139,68 @@
 
 <nav class="top">
   <div class="shell">
-    <a class="brand" href="#">EveryWear</a>
-    <button class="nav-btn" id="tryOnNavLink" type="button">Live passen</button>
+    <div class="brand-block">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-11 4 7 3-5 5 9z"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">EveryWear</div>
+        <div class="brand-sub">Frame Studio · Natuur &amp; Avontuur</div>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="meta-block">
+        <div class="meta-label">Ref</div>
+        <div class="meta-value" id="refCode">EW-1A-NBCL00</div>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Total</div>
+        <div class="meta-value total" id="totalPrice">€55</div>
+      </div>
+      <button class="btn-outline" id="tryOnBtn" type="button">Probeer Op</button>
+      <button class="btn-outline" id="resetBtn" type="button">Reset</button>
+      <button class="btn-solid" id="finishBtn" type="button">Finish Design</button>
+    </div>
   </div>
 </nav>
 
 <main>
   <div class="studio shell">
-    <div class="studio-head">
-      <div>
-        <h1>Frame Studio</h1>
-        <div class="collection">Natuur &amp; Avontuur</div>
+    <div class="option-rows">
+      <div class="option-row">
+        <div class="option-row-label">Montuur</div>
+        <div class="wheel-row" id="montuurRow"></div>
       </div>
-      <div class="studio-meta">
-        <div class="ref" id="refCode">Ref EW-1A-NBST00</div>
-        <div class="total" id="totalPrice">€55</div>
+      <div class="option-row">
+        <div class="option-row-label">Pootjes</div>
+        <div class="wheel-row" id="pootjesRow"></div>
+      </div>
+      <div class="option-row">
+        <div class="option-row-label">Materiaal</div>
+        <div class="wheel-row" id="materiaalRow"></div>
       </div>
     </div>
 
-    <div class="studio-grid">
-      <div class="stage-card">
-        <div class="preview-area">
-          <div class="preview-toolbar">
-            <div class="zoom-group">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="range" id="zoomRange" min="80" max="160" value="100" aria-label="Zoom">
-            </div>
-            <div class="pill-group" id="lightToggle">
-              <button data-light="studio" class="active">Studio</button>
-              <button data-light="daylight">Daylight</button>
-              <button data-light="pearl">Pearl</button>
-            </div>
-          </div>
-          <div class="stage-pair" id="previewStage">
-            <div class="stage-single" id="stageVoor">
-              <span class="angle-label">Voor</span>
-              <canvas id="previewCanvasVoor" width="360" height="360"></canvas>
-            </div>
-            <div class="stage-single" id="stageZij">
-              <span class="angle-label">Zij</span>
-              <canvas id="previewCanvasZij" width="360" height="360"></canvas>
-            </div>
-          </div>
+    <div class="stage-card" id="previewStage">
+      <div class="stage-pair">
+        <div class="stage-single" id="stageVoor">
+          <canvas id="previewCanvasVoor" width="360" height="360"></canvas>
+          <span class="angle-label">Voor</span>
         </div>
-
-        <div class="picker-sheet">
-          <div class="tabs" id="tabBar">
-            <button data-tab="montuur" class="active">Montuur</button>
-            <button data-tab="pootjes">Pootjes</button>
-            <button data-tab="materiaal">Materiaal</button>
-          </div>
-          <div class="wheel-row" id="optionList"></div>
-          <div class="action-row">
-            <button class="primary" id="tryOnBtn">Probeer Op</button>
-            <button id="resetBtn">Reset</button>
-            <button id="finishBtn">Finish Design</button>
-          </div>
+        <div class="stage-single" id="stageZij">
+          <canvas id="previewCanvasZij" width="360" height="360"></canvas>
+          <span class="angle-label">Zij</span>
+        </div>
+      </div>
+      <div class="stage-controls">
+        <div class="zoom-group">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="range" id="zoomRange" min="80" max="160" value="100" aria-label="Zoom">
+        </div>
+        <div class="pill-group" id="lightToggle">
+          <button data-light="studio" class="active">Studio</button>
+          <button data-light="daylight">Daylight</button>
+          <button data-light="pearl">Pearl</button>
         </div>
       </div>
     </div>
@@ -258,7 +274,6 @@ let state = {
   materiaal: 'nachtblauw',
   view: 'voor',
   light: 'studio',
-  tab: 'montuur',
 };
 
 function getMateriaal(id){ return MATERIALEN.find(m=>m.id===id); }
@@ -430,8 +445,8 @@ function drawPreview(){
 
   const bgVar = state.light === 'studio' ? '--stage-studio' : state.light === 'daylight' ? '--stage-daylight' : '--stage-pearl';
   const bg = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
-  stageVoor.style.background = bg;
-  stageZij.style.background = bg;
+  document.getElementById('previewStage').style.background =
+    `linear-gradient(180deg, ${bg}, color-mix(in srgb, ${bg} 70%, var(--olive)))`;
 }
 
 /* ---------- price + ref code ---------- */
@@ -449,23 +464,10 @@ function refresh(){
   syncLiveColor();
 }
 
-/* ---------- tabs + option list ---------- */
-document.getElementById('tabBar').addEventListener('click', e=>{
-  const btn = e.target.closest('button[data-tab]');
-  if(!btn) return;
-  state.tab = btn.dataset.tab;
-  document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('active', b===btn));
-  renderOptions();
-});
-
-function renderOptions(){
-  const list = document.getElementById('optionList');
+/* ---------- option rows: Montuur / Pootjes / Materiaal, all visible at once ---------- */
+function renderRow(listId, items, selectedId, isColor, onPick){
+  const list = document.getElementById(listId);
   list.innerHTML = '';
-  let items, selectedId, isColor;
-  if(state.tab === 'montuur'){ items = MONTUREN; selectedId = state.montuur; isColor=false; }
-  else if(state.tab === 'pootjes'){ items = POOTJES; selectedId = state.pootje; isColor=false; }
-  else { items = MATERIALEN; selectedId = state.materiaal; isColor=true; }
-
   items.forEach(item=>{
     const chip = document.createElement('div');
     chip.className = 'wheel-chip' + (item.id===selectedId ? ' selected' : '');
@@ -486,17 +488,15 @@ function renderOptions(){
     price.textContent = item.price > 0 ? `+€${item.price}` : 'incl.';
     chip.appendChild(label); chip.appendChild(price);
 
-    chip.onclick = ()=>{
-      if(state.tab==='montuur') state.montuur = item.id;
-      else if(state.tab==='pootjes') state.pootje = item.id;
-      else state.materiaal = item.id;
-      refresh();
-    };
+    chip.onclick = ()=>{ onPick(item.id); refresh(); };
     list.appendChild(chip);
   });
+}
 
-  const sel = list.querySelector('.wheel-chip.selected');
-  if(sel) sel.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+function renderOptions(){
+  renderRow('montuurRow', MONTUREN, state.montuur, false, id=>{ state.montuur = id; });
+  renderRow('pootjesRow', POOTJES, state.pootje, false, id=>{ state.pootje = id; });
+  renderRow('materiaalRow', MATERIALEN, state.materiaal, true, id=>{ state.materiaal = id; });
 }
 
 /* ---------- zoom ---------- */
@@ -522,9 +522,11 @@ function showToast(msg){
   showToast._t = setTimeout(()=> t.classList.remove('show'), 2200);
 }
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  state = { montuur:1, pootje:'A', materiaal:'nachtblauw', view:'voor', light:'studio', tab:'montuur' };
+  state = { montuur:1, pootje:'A', materiaal:'nachtblauw', view:'voor', light:'studio' };
   document.querySelectorAll('#lightToggle button').forEach(b=>b.classList.toggle('active', b.dataset.light==='studio'));
-  document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('active', b.dataset.tab==='montuur'));
+  document.getElementById('zoomRange').value = 100;
+  previewCanvasVoor.style.transform = 'scale(1)';
+  previewCanvasZij.style.transform = 'scale(1)';
   refresh();
   showToast('Ontwerp gereset');
 });
@@ -546,7 +548,6 @@ function closeTryOn(){
   document.getElementById('startBtn').addEventListener('click', startCamera);
 }
 document.getElementById('tryOnBtn').addEventListener('click', openTryOn);
-document.getElementById('tryOnNavLink').addEventListener('click', (e)=>{ e.preventDefault(); openTryOn(); });
 document.getElementById('closeTryOn').addEventListener('click', closeTryOn);
 tryonModal.addEventListener('click', (e)=>{ if(e.target===tryonModal) closeTryOn(); });
 
