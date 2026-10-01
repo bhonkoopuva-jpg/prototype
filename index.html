@@ -686,8 +686,13 @@ function buildHingeStubGeometry(montuur){
   // with real overlap, not just up to the rim's own front-to-back depth —
   // otherwise a thin montuur (small rimDepth) can leave a sub-mm gap at the
   // exact point the temple attaches, however good it looks at other angles.
-  const zDepth = Math.max(montuur.rimDepth*0.85, (HINGE.z + 2.5)*2);
-  const geo = new THREE.BoxGeometry(len, Math.max(2.2, montuur.rimBorder*1.7), zDepth);
+  // The overlap margin is kept small (0.7mm each side, not the 2.5mm this
+  // used to be) because on a thin wire frame like Dodoma (rimDepth ~2.6mm,
+  // rimBorder ~0.9mm) an oversized margin produces a hinge-stub block far
+  // thicker than the frame's own real wire -- a visible, unrealistic
+  // "brick" right where the photo shows a slim, barely-noticeable joint.
+  const zDepth = Math.max(montuur.rimDepth*0.85, (HINGE.z + 0.7)*2);
+  const geo = new THREE.BoxGeometry(len, Math.max(1.1, montuur.rimBorder*1.7), zDepth);
   geo.translate(lensEdgeX + len/2, HINGE.y, 0);
   return geo;
 }
