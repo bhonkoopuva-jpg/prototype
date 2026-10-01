@@ -390,6 +390,13 @@ const POOTJES = [
     // null = not yet measured; falls back to the curvePoints' own 140mm
     // calibration anchor — see pootjeScaleFactor() below.
     REAL_WORLD_DIMENSIONS:{ templeLength:null },
+    // GEMETEN uit green-pootje.jpg: vanaf ~72% van de pootjelengte wordt
+    // het materiaal zichtbaar lichter/doorschijnend (mediaan RGB 97,109,117
+    // → 155,158,165 over een kolom-scan van de foto) — een apart stukje
+    // materiaal aan het uiteinde, niet dezelfde kleur als de rest van het
+    // pootje. AANGENOMEN dat dit onafhankelijk is van de gekozen montuurkleur
+    // (alleen op deze ene foto zichtbaar, niet per materiaalvariant bevestigd).
+    tipMaterial:{ startFraction:0.72, hex:'#9b9ea5' },
     curvePoints:[[0,-0],[-4.65,-1.84],[-7.05,-2.01],[-11.85,-2.27],[-16.5,-2.56],[-18.9,-2.76],[-23.71,-3.13],[-28.35,-3.52],[-30.76,-3.71],[-35.56,-4.09],[-40.21,-4.47],[-45.01,-4.86],[-47.41,-5.05],[-52.06,-5.4],[-56.86,-5.76],[-59.27,-5.96],[-63.91,-6.33],[-68.72,-6.74],[-71.12,-6.96],[-75.93,-7.4],[-80.57,-7.8],[-82.97,-8],[-87.78,-8.41],[-92.43,-8.78],[-94.83,-9],[-99.63,-9.47],[-104.28,-10.01],[-109.08,-10.23],[-111.49,-10.38],[-116.13,-11.13],[-120.94,-11.81],[-123.34,-12.35],[-127.99,-13.69],[-132.79,-15.99],[-135.19,-17.67],[-140,-18.84]] },
   // Kuala Lumpur = tortoise-pootje.jpg. Note the measured tip drop here
   // (~39mm) is notably larger than Dodoma's (~19mm) — plausible for a
@@ -404,6 +411,10 @@ const POOTJES = [
     // null = not yet measured; falls back to the curvePoints' own 140mm
     // calibration anchor — see pootjeScaleFactor() below.
     REAL_WORLD_DIMENSIONS:{ templeLength:null },
+    // GEMETEN: tortoise-pootje.jpg toont één doorlopend schildpadpatroon
+    // tot aan het uiteinde, geen apart lichter tip-materiaal zichtbaar —
+    // dus hier null, niet aangenomen gelijk aan Dodoma.
+    tipMaterial:null,
     curvePoints:[[0,-0],[-4.72,-1.6],[-7.01,-1.71],[-11.86,-1.93],[-16.57,-2.36],[-18.86,-3.14],[-23.72,-3.28],[-28.43,-3.25],[-30.72,-3.27],[-35.57,-3.36],[-40.29,-3.5],[-45,-3.78],[-47.43,-3.94],[-52.15,-4.32],[-56.86,-4.79],[-59.29,-5.08],[-64,-5.73],[-68.72,-6.46],[-71.15,-6.85],[-75.86,-7.05],[-80.58,-7.43],[-83,-7.69],[-87.72,-8.31],[-92.44,-9.18],[-94.86,-9.75],[-99.58,-11.24],[-104.29,-13.36],[-109.14,-16.62],[-111.43,-18.61],[-116.15,-23.55],[-121,-27.04],[-123.29,-28.56],[-128.01,-31.68],[-132.86,-35.01],[-135.15,-36.92],[-140,-39.48]] },
 ];
 function getPootje(id){ return POOTJES.find(p=>p.id===id); }
@@ -640,8 +651,23 @@ function buildLensRimGeometry(montuur){
   const outer = shapeFromContour(frameOuterContour);
   const inner = shapeFromContour(lensContour);
   outer.holes.push(inner);
+  // a thin wire rim (Dodoma) is round in real life — a narrow flat strip
+  // with only a small corner bevel reads as a faceted, flat-plate cross
+  // section under reflective metal lighting instead of a smooth round
+  // wire. Rather than a fixed bevel tuned for a thick acetate rim, size it
+  // from this frame's own measured minimum thickness (half the smallest
+  // outer-to-inner gap, taken straight from the two measured contours) so
+  // the bevel can approach "fully rounded" on a thin wire without
+  // overrunning the strip and self-intersecting on a thicker acetate rim.
+  let minHalfThickness = Infinity;
+  for(let i=0;i<lensContour.length;i++){
+    const dx = frameOuterContour[i][0]-lensContour[i][0], dy = frameOuterContour[i][1]-lensContour[i][1];
+    minHalfThickness = Math.min(minHalfThickness, Math.hypot(dx,dy)/2);
+  }
+  const bevelSize = Math.max(0.12, Math.min(0.3, minHalfThickness*0.85));
+  const bevelThickness = Math.max(0.12, Math.min(0.5, d*0.3));
   const geo = new THREE.ExtrudeGeometry(outer, {
-    depth:d, bevelEnabled:true, bevelThickness:0.35, bevelSize:0.3, bevelSegments:2, curveSegments:20,
+    depth:d, bevelEnabled:true, bevelThickness, bevelSize, bevelSegments:6, curveSegments:28,
   });
   geo.translate(0, 0, -d/2);
   return geo;
@@ -703,11 +729,15 @@ function buildHingeStubGeometry(montuur){
 // thin cable-like tip in tortoise-pootje.jpg. Mirrors TubeGeometry's own
 // construction (Frenet frames around the curve), just with radiusFn(t)
 // instead of one fixed radius.
-function buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn){
+// ringStart/ringEnd let a caller take only a sub-range of the tube (e.g. the
+// pootje's measured pale tip segment) while keeping radiusFn evaluated on the
+// curve's GLOBAL t, so the taper stays continuous across the split instead of
+// re-tapering each piece from scratch.
+function buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn, ringStart=0, ringEnd=segments){
   const frames = curve.computeFrenetFrames(segments, false);
   const pathPoints = curve.getSpacedPoints(segments);
   const positions = [], normals = [], indices = [];
-  for(let i=0;i<=segments;i++){
+  for(let i=ringStart;i<=ringEnd;i++){
     const r = radiusFn(i/segments);
     const N = frames.normals[i], B = frames.binormals[i], P = pathPoints[i];
     for(let j=0;j<=radialSegments;j++){
@@ -718,7 +748,8 @@ function buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn){
       normals.push(nx, ny, nz);
     }
   }
-  for(let i=0;i<segments;i++){
+  const localSegments = ringEnd - ringStart;
+  for(let i=0;i<localSegments;i++){
     for(let j=0;j<radialSegments;j++){
       const a = (radialSegments+1)*i + j, b = (radialSegments+1)*(i+1) + j;
       const c = (radialSegments+1)*(i+1) + (j+1), d = (radialSegments+1)*i + (j+1);
@@ -740,6 +771,10 @@ function buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn){
 // run backward from the hinge pivot at local origin; `flare` is the one
 // part of this curve a side-profile photo can't show at all (outward X
 // splay only shows in a front/top view), so it stays a straight ramp.
+// Returns { main } normally, or { main, tip } when this pootje has a
+// measured tipMaterial — `tip` is the last stretch of the SAME curve/taper
+// (split by ring index, not a separate curve) so the two pieces meet exactly,
+// with no seam gap or taper discontinuity.
 function buildTempleGeometry(pootje, side){
   // normalize against this pootje's OWN curve length, not the fallback
   // constant — once a real templeLength measurement scales curvePoints
@@ -751,11 +786,19 @@ function buildTempleGeometry(pootje, side){
   });
   const curve = new THREE.CatmullRomCurve3(pts);
   const radiusFn = t => THREE.MathUtils.lerp(pootje.thickness/2, pootje.tipThickness/2, Math.min(1, t/0.9));
-  const geo = buildTaperedTubeGeometry(curve, 56, 10, radiusFn);
-  if(pootje.width > pootje.thickness){
-    geo.scale(pootje.width/pootje.thickness, 1, 1); // flatten into an oval cross-section
+  const segments = 56, radialSegments = 10;
+  const applyOvalScale = (geo) => {
+    if(pootje.width > pootje.thickness) geo.scale(pootje.width/pootje.thickness, 1, 1);
+    return geo;
+  };
+  if(pootje.tipMaterial){
+    const splitRing = Math.round(pootje.tipMaterial.startFraction * segments);
+    return {
+      main: applyOvalScale(buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn, 0, splitRing)),
+      tip: applyOvalScale(buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn, splitRing, segments)),
+    };
   }
-  return geo;
+  return { main: applyOvalScale(buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn)) };
 }
 
 // assemble one full pair of glasses: montuur + pootje, combined dynamically
@@ -784,9 +827,15 @@ function buildGlassesGroup(montuur, pootje, material, lensMaterial){
     stub.scale.x = side;
     group.add(stub);
 
-    const temple = new THREE.Mesh(side===1 ? templeGeoR : templeGeoL, material);
+    const templeGeo = side===1 ? templeGeoR : templeGeoL;
+    const temple = new THREE.Mesh(templeGeo.main, material);
     temple.position.set(side*HINGE.x, HINGE.y, HINGE.z);
     group.add(temple);
+    if(templeGeo.tip){
+      const tip = new THREE.Mesh(templeGeo.tip, getTipMaterial(pootje.tipMaterial.hex));
+      tip.position.set(side*HINGE.x, HINGE.y, HINGE.z);
+      group.add(tip);
+    }
   });
   group.add(new THREE.Mesh(bridgeGeo, material));
   return group;
@@ -861,6 +910,24 @@ const lensMaterial = new THREE.MeshPhysicalMaterial({
   color:0xffffff, roughness:0.04, transmission:1, ior:1.5, thickness:0.6,
   envMapIntensity:1.1, side: THREE.DoubleSide,
 });
+
+// pootje tip material (e.g. Dodoma's measured pale/translucent temple end,
+// see POOTJES[A].tipMaterial) — a fixed physical feature of that specific
+// temple, independent of the materiaal picker, so it is NOT recolored by
+// updateVisuals() the way sharedMaterial is. Mild transmission + low
+// metalness reflects that the photo showed it visibly lighter and slightly
+// frosted/translucent compared to the opaque main shaft, not just a paler
+// opaque paint. Cached per hex so repeated rebuilds reuse one instance.
+const tipMaterialCache = new Map();
+function getTipMaterial(hex){
+  if(!tipMaterialCache.has(hex)){
+    tipMaterialCache.set(hex, new THREE.MeshPhysicalMaterial({
+      color: hex, roughness:0.45, metalness:0.05, transmission:0.25,
+      thickness:0.8, ior:1.45, envMapIntensity:0.9, side: THREE.DoubleSide,
+    }));
+  }
+  return tipMaterialCache.get(hex);
+}
 
 // tortoiseshell pattern for the "Schildpad" materiaal — GEMETEN, not
 // procedural: assets/tortoise-texture.jpg is a crop taken directly from
