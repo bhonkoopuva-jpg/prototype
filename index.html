@@ -375,7 +375,15 @@ function drawPootjeArm(ctx, x, y, scale, color, style){
    box sitting on top of it */
 function tintRect(ctx, dx, dy, dw, dh, color){
   const [tr,tg,tb] = hexToRgb(color);
-  const frame = ctx.getImageData(dx, dy, Math.max(1,Math.round(dw)), Math.max(1,Math.round(dh)));
+  // round outward (floor the top-left, ceil the bottom-right) rather than
+  // rounding dw/dh independently of dx/dy — otherwise the tinted/cutout
+  // region can land a fraction of a pixel short of what drawImage actually
+  // painted, leaving an untouched (opaque, un-tinted) sliver of the source
+  // photo's background visible as a stray line at larger scales
+  const x0 = Math.floor(dx), y0 = Math.floor(dy);
+  const x1 = Math.ceil(dx+dw), y1 = Math.ceil(dy+dh);
+  const rw = Math.max(1, x1-x0), rh = Math.max(1, y1-y0);
+  const frame = ctx.getImageData(x0, y0, rw, rh);
   const d = frame.data;
   for(let i=0;i<d.length;i+=4){
     const r=d[i], g=d[i+1], b=d[i+2];
@@ -387,7 +395,7 @@ function tintRect(ctx, dx, dy, dw, dh, color){
     d[i+1] = tg*lum + g*0.18;
     d[i+2] = tb*lum + b*0.18;
   }
-  ctx.putImageData(frame, dx, dy);
+  ctx.putImageData(frame, x0, y0);
 }
 
 /* ---- side view: draw the montuur's own real rim/hinge photo, tinted, then attach
@@ -406,7 +414,7 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
   // result doesn't look edge-to-edge cropped
   const sw = img.naturalWidth, sh = img.naturalHeight;
   const rimBudget = w * 0.16;
-  const scale = Math.min(rimBudget/sw, h*0.28/sh);
+  const scale = Math.min(rimBudget/sw, h*0.40/sh);
   const dw = sw*scale, dh = sh*scale;
   const dx = rimBudget - dw, dy = (h-dh)/2;
 
@@ -415,12 +423,12 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
 
   const hingeX = dx + dw;
   const hingeY = dy + dh * (montuur.hingeFrac != null ? montuur.hingeFrac : 0.3);
-  const armBudget = w - hingeX - w*0.05;
+  const armBudget = w - hingeX - w*0.02;
 
   if(pootje.img){
     const pImg = loadMontuurImage(pootje.img);
     if(pImg.complete && pImg.naturalWidth > 0){
-      const pScale = Math.min(armBudget/pImg.naturalWidth, h*0.35/pImg.naturalHeight);
+      const pScale = Math.min(armBudget/pImg.naturalWidth, h*0.60/pImg.naturalHeight);
       const pdw = pImg.naturalWidth * pScale, pdh = pImg.naturalHeight * pScale;
       const pFrac = pootje.hingeFrac != null ? pootje.hingeFrac : 0.25;
       const pdx = hingeX, pdy = hingeY - pdh * pFrac;
