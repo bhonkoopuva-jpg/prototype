@@ -237,10 +237,9 @@
 <script>
 /* ---------- configuration data (from the real Frame Studio) ---------- */
 const MONTUREN = [
-  { id:1, label:'Montuur 1', price:45, voor:'assets/montuur1-voor.jpg', zij:'assets/montuur1-zij.jpg', zijCrop:0.42 },
-  { id:2, label:'Montuur 2', price:45, voor:'assets/montuur2-voor.jpg', zij:'assets/montuur2-zij.jpg', zijCrop:0.42 },
-  { id:3, label:'Montuur 3', price:45, voor:'assets/montuur3-voor.jpg', zij:'assets/montuur3-zij.jpg', zijCrop:0.42 },
-  { id:4, label:'Montuur 4', price:45, voor:'assets/montuur4-voor.jpg', zij:'assets/montuur4-zij.jpg', zijCrop:0.42 },
+  { id:1, label:'Montuur 1', price:45, voor:'assets/green-voor.jpg', zij:'assets/green-zij-montuur.jpg', hingeFrac:0.402 },
+  { id:2, label:'Montuur 2', price:45, voor:'assets/champagne-voor.jpg', zij:'assets/champagne-zij-montuur.jpg', hingeFrac:0.288 },
+  { id:3, label:'Montuur 3', price:45, voor:'assets/tortoise-voor.jpg', zij:'assets/tortoise-zij-montuur.jpg', hingeFrac:0.280 },
 ];
 function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
 const montuurImgCache = {};
@@ -252,9 +251,9 @@ function loadMontuurImage(src){
   return img;
 }
 const POOTJES = [
-  { id:'A', label:'Pootje A', price:0 },
-  { id:'B', label:'Pootje B', price:0 },
-  { id:'C', label:'Pootje C', price:0 },
+  { id:'A', label:'Pootje A', price:0, voor:'assets/green-pootje.jpg', img:'assets/green-pootje.jpg', hingeFrac:0.204 },
+  { id:'B', label:'Pootje B', price:0, voor:'assets/champagne-pootje.jpg', img:'assets/champagne-pootje.jpg', hingeFrac:0.249 },
+  { id:'C', label:'Pootje C', price:0, voor:'assets/tortoise-pootje.jpg', img:'assets/tortoise-pootje.jpg', hingeFrac:0.268 },
   { id:'D', label:'Pootje D', price:0 },
 ];
 const MATERIALEN = [
@@ -376,19 +375,7 @@ function drawPootjeArm(ctx, x, y, scale, color, style){
   ctx.restore();
 }
 
-/* ---- side view: crop the real photo to just the hinge/lens area, tint it,
-   then attach a vector pootje in the same color so montuur + pootje read as one piece ---- */
-function drawSideComposite(ctx, img, w, h, color, montuur, pootjeStyle){
-  ctx.clearRect(0,0,w,h);
-  if(!img.complete || img.naturalWidth===0) return false;
-
-  const cropFrac = montuur.zijCrop || 0.42;
-  const sw = img.naturalWidth * cropFrac, sh = img.naturalHeight;
-  const scale = Math.min(w*0.62/sw, h/sh); // leave room on the right for the drawn pootje
-  const dw = sw*scale, dh = sh*scale;
-  const dx = w*0.5 - dw, dy = (h-dh)/2;
-
-  ctx.drawImage(img, 0, 0, sw, sh, dx, dy, dw, dh);
+function tintRect(ctx, dx, dy, dw, dh, color){
   const [tr,tg,tb] = hexToRgb(color);
   const frame = ctx.getImageData(dx, dy, Math.max(1,Math.round(dw)), Math.max(1,Math.round(dh)));
   const d = frame.data;
@@ -401,9 +388,50 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootjeStyle){
     d[i+2] = tb*lum + b*0.18;
   }
   ctx.putImageData(frame, dx, dy);
+}
 
-  const hingeX = dx + dw, hingeY = dy + dh*0.42;
-  drawPootjeArm(ctx, hingeX, hingeY, scale*3.1, color, pootjeStyle);
+/* ---- side view: draw the montuur's own real rim/hinge photo, tinted, then attach
+   the independently-selected pootje (a real cropped temple photo, also tinted) at the
+   hinge point, aligned using each photo's own measured hinge height — so montuur and
+   pootje read as one connected piece even though they come from different photos.
+   Falls back to a hand-drawn vector arm only for Pootje D, which has no photo. ---- */
+function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
+  ctx.clearRect(0,0,w,h);
+  if(!img.complete || img.naturalWidth===0) return false;
+
+  // rim gets a fixed share of the canvas width; the arm gets the rest, each
+  // scaled to its own available space (the arm photo is much wider/shorter
+  // than the rim crop, so one shared scale would either overflow or shrink
+  // the rim to nothing)
+  const sw = img.naturalWidth, sh = img.naturalHeight;
+  const rimBudget = w * 0.4;
+  const scale = Math.min(rimBudget/sw, h*0.92/sh);
+  const dw = sw*scale, dh = sh*scale;
+  const dx = rimBudget - dw, dy = (h-dh)/2;
+
+  ctx.drawImage(img, 0, 0, sw, sh, dx, dy, dw, dh);
+  tintRect(ctx, dx, dy, dw, dh, color);
+
+  const hingeX = dx + dw;
+  const hingeY = dy + dh * (montuur.hingeFrac != null ? montuur.hingeFrac : 0.3);
+
+  if(pootje.img){
+    const pImg = loadMontuurImage(pootje.img);
+    if(pImg.complete && pImg.naturalWidth > 0){
+      const armBudget = w - hingeX - w*0.03;
+      const pScale = Math.min(armBudget/pImg.naturalWidth, h*0.55/pImg.naturalHeight);
+      const pdw = pImg.naturalWidth * pScale, pdh = pImg.naturalHeight * pScale;
+      const pFrac = pootje.hingeFrac != null ? pootje.hingeFrac : 0.25;
+      const pdx = hingeX, pdy = hingeY - pdh * pFrac;
+      ctx.drawImage(pImg, 0, 0, pImg.naturalWidth, pImg.naturalHeight, pdx, pdy, pdw, pdh);
+      tintRect(ctx, pdx, pdy, pdw, pdh, color);
+    } else {
+      drawPootjeArm(ctx, hingeX, hingeY, scale*3.1, color, pootje.id);
+      pImg.onload = ()=>{ if(state.pootje===pootje.id) drawPreview(); };
+    }
+  } else {
+    drawPootjeArm(ctx, hingeX, hingeY, scale*3.1, color, pootje.id);
+  }
   return true;
 }
 
@@ -426,10 +454,10 @@ function drawOneAngle(canvas, ctx, montuur, src, color, fallbackDraw){
   }
 }
 
-function drawZijAngle(canvas, ctx, montuur, color, pootjeStyle){
+function drawZijAngle(canvas, ctx, montuur, color, pootje){
   const img = loadMontuurImage(montuur.zij);
   const w = canvas.width, h = canvas.height;
-  const ok = drawSideComposite(ctx, img, w, h, color, montuur, pootjeStyle);
+  const ok = drawSideComposite(ctx, img, w, h, color, montuur, pootje);
   if(!ok){
     ctx.clearRect(0,0,w,h);
     drawGlassesSide(ctx, w/2, h/2, 2.6, color);
@@ -440,8 +468,9 @@ function drawZijAngle(canvas, ctx, montuur, color, pootjeStyle){
 function drawPreview(){
   const color = getMateriaal(state.materiaal).hex;
   const montuur = getMontuur(state.montuur);
+  const pootje = POOTJES.find(p=>p.id===state.pootje);
   drawOneAngle(previewCanvasVoor, pvctxVoor, montuur, montuur.voor, color, drawGlassesFront);
-  drawZijAngle(previewCanvasZij, pvctxZij, montuur, color, state.pootje);
+  drawZijAngle(previewCanvasZij, pvctxZij, montuur, color, pootje);
 
   const bgVar = state.light === 'studio' ? '--stage-studio' : state.light === 'daylight' ? '--stage-daylight' : '--stage-pearl';
   const bg = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
