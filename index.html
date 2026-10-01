@@ -407,8 +407,8 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
   // the rim to nothing) — kept a fraction under 100% of its budget so the
   // result doesn't look edge-to-edge cropped
   const sw = img.naturalWidth, sh = img.naturalHeight;
-  const rimBudget = w * 0.36;
-  const scale = Math.min(rimBudget/sw, h*0.60/sh);
+  const rimBudget = w * 0.16;
+  const scale = Math.min(rimBudget/sw, h*0.28/sh);
   const dw = sw*scale, dh = sh*scale;
   const dx = rimBudget - dw, dy = (h-dh)/2;
 
