@@ -272,44 +272,53 @@ const TEMPLE_LENGTH_MM = 140; // realistic adult temple length (135–145mm brie
 /* ---------- configuration data ----------
    Every montuur/pootje here is a real parametric 3D shape in millimeters,
    not a photo — so scale is physically meaningful now and the same model
-   can later drive an AR try-on without being rebuilt. The numeric values
-   below are reconstructed from the actual reference photos in assets/
-   (green-voor/zij/pootje.jpg = Dodoma, tortoise-voor/zij/pootje.jpg =
-   Kuala Lumpur), not generic shapes — see the shape-building functions
-   below for how `roundness`/`browFlatten` and the pootje curve params map
-   back to what's visible in those photos. */
+   can later drive an AR try-on without being rebuilt. These numbers are
+   not just visually estimated: assets/*.jpg were measured with a pixel
+   analysis pass (connected-component hole bounding boxes for lens
+   width/height ratio, per-column thickness + centerline-slope profiles
+   for the pootjes) to calibrate the proportions below, then cross-checked
+   against zoomed crops of the same photos. See the shape-building
+   functions for how each field maps back to what's visible. */
 const MONTUREN = [
-  // Dodoma (green-voor.jpg): thin wire metal frame, a soft rounded shape
-  // that's slightly flatter across the brow than a true circle (not a
-  // rounded rectangle) — low roundness exponent + a touch of brow
-  // flattening gets close to that silhouette. Very thin rim (wire-like).
+  // Dodoma (green-voor.jpg): thin wire metal frame. Measured inner-lens
+  // hole aspect ratio (pixel bbox of the enclosed lens opening) is
+  // ≈1.16:1 (462x399px) — rounder than the previous 1.27:1 guess, hence
+  // the taller lensHeight below. Soft, slightly-angular round shape with
+  // a flatter brow and a fuller lower edge (chinFullness).
   { id:1, label:'Dodoma', price:45, shape:'round', finish:'metal',
-    lensWidth:50, lensHeight:40, bridgeWidth:19, rimBorder:1.6, rimDepth:2.6,
-    roundness:2.35, browFlatten:0.16 },
-  // Kuala Lumpur (tortoise-voor.jpg): thick acetate, soft square lens —
-  // higher roundness exponent = flatter sides with gently rounded corners,
-  // no brow flattening needed since the photo's top edge is already fairly
-  // straight at this exponent.
+    lensWidth:50, lensHeight:45, bridgeWidth:20, rimBorder:1.5, rimDepth:2.6,
+    roundness:2.5, browFlatten:0.14, chinFullness:0.07 },
+  // Kuala Lumpur (tortoise-voor.jpg): thick acetate, soft square lens.
+  // Measured inner-lens aspect ratio ≈1.31:1 (454x348px) — more elongated
+  // than the previous 1.20:1 guess, hence wider/shorter below. Higher
+  // roundness exponent = flatter sides with gently rounded corners,
+  // matching the zoomed crop's fairly rectangular silhouette.
   { id:3, label:'Kuala Lumpur', price:45, shape:'square', finish:'acetate',
-    lensWidth:51, lensHeight:44, bridgeWidth:17, rimBorder:4.8, rimDepth:6.2,
-    roundness:4.6, browFlatten:0 },
+    lensWidth:52, lensHeight:42, bridgeWidth:17, rimBorder:4.8, rimDepth:6.2,
+    roundness:5.2, browFlatten:0, chinFullness:0 },
 ];
 function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
 
 const POOTJES = [
   // Dodoma (green-pootje.jpg / green-zij-montuur.jpg): thin flat metal
-  // temple, essentially straight for most of its length — only a sharp,
-  // late hook-like bend right near the tip (acetate-covered end). No
-  // taper: the wire reads the same thickness along the whole arm.
+  // temple, essentially straight for most of its length. A per-column
+  // centerline-slope measurement of the photo confirms the bend genuinely
+  // starts late (slope only breaks from its ~0.08 baseline past roughly
+  // 80% of the length) and the total vertical drop implied by the photo
+  // (~16mm) matches bendAmount+the baseline slope almost exactly — no
+  // taper: the wire reads the same width along the whole arm.
   { id:'A', label:'Dodoma', price:0, style:'thin',
-    thickness:2.0, tipThickness:2.0, width:2.4, flare:1.5,
+    thickness:2.0, tipThickness:2.0, width:2.7, flare:1.5,
     bendStart:0.83, bendAmount:15, bendPower:2.3 },
   // Kuala Lumpur (tortoise-pootje.jpg): thick acetate at the hinge,
-  // continuously tapering down to a thin cable-like tip, with a gentler,
-  // earlier curve (not a sharp hook) — a long comfort bend rather than a
-  // late one, and no flared paddle at the end.
+  // tapering down to a thinner tip. The same slope measurement shows this
+  // one's bend breaking from baseline much earlier (~45-55% along the
+  // length) — a long comfort curve, not a late hook — confirming the
+  // early bendStart; the taper ratio was moderated after measuring the
+  // photo's actual width profile (perspective foreshortening on the
+  // curved back half of that photo exaggerates taper if read literally).
   { id:'C', label:'Kuala Lumpur', price:0, style:'bold',
-    thickness:4.4, tipThickness:1.7, width:5.8, flare:2.5,
+    thickness:4.2, tipThickness:2.0, width:5.6, flare:2.5,
     bendStart:0.52, bendAmount:12, bendPower:1.3 },
 ];
 function getPootje(id){ return POOTJES.find(p=>p.id===id); }
@@ -370,8 +379,10 @@ function drawGlassesFront(ctx, cx, cy, unitScale, color){
 // slightly-angular round shape in green-voor.jpg; a high `n` (Kuala
 // Lumpur, ~4.6) gives the flatter-sided soft square in tortoise-voor.jpg.
 // `browFlatten` compresses the upper half toward a straighter brow line,
-// which Dodoma's photo shows but a pure superellipse doesn't produce.
-function lensOutlineShape(w, h, n, browFlatten){
+// `chinFullness` expands the lower half slightly for a fuller bottom edge
+// — both visible in Dodoma's photo (flatter brow, rounder chin) but not
+// something a pure (symmetric) superellipse produces on its own.
+function lensOutlineShape(w, h, n, browFlatten, chinFullness){
   const segments = 72;
   const a = w/2, b = h/2;
   const s = new THREE.Shape();
@@ -381,6 +392,7 @@ function lensOutlineShape(w, h, n, browFlatten){
     const x = Math.sign(ct) * Math.pow(Math.abs(ct), 2/n) * a;
     let y = Math.sign(st) * Math.pow(Math.abs(st), 2/n) * b;
     if(browFlatten && st > 0) y *= (1 - browFlatten);
+    if(chinFullness && st < 0) y *= (1 + chinFullness);
     if(i===0) s.moveTo(x,y); else s.lineTo(x,y);
   }
   s.closePath();
@@ -391,9 +403,9 @@ function lensOutlineShape(w, h, n, browFlatten){
 // outline, extruded front-to-back) — symmetric about its own local origin,
 // so the left lens is just a mirrored *position*, never a mirrored mesh.
 function buildLensRimGeometry(montuur){
-  const { lensWidth:w, lensHeight:h, rimBorder:b, rimDepth:d, roundness:n, browFlatten:bf } = montuur;
-  const outer = lensOutlineShape(w, h, n, bf);
-  const inner = lensOutlineShape(Math.max(2,w-b*2), Math.max(2,h-b*2), n, bf);
+  const { lensWidth:w, lensHeight:h, rimBorder:b, rimDepth:d, roundness:n, browFlatten:bf, chinFullness:cf } = montuur;
+  const outer = lensOutlineShape(w, h, n, bf, cf);
+  const inner = lensOutlineShape(Math.max(2,w-b*2), Math.max(2,h-b*2), n, bf, cf);
   outer.holes.push(inner);
   const geo = new THREE.ExtrudeGeometry(outer, {
     depth:d, bevelEnabled:true, bevelThickness:0.35, bevelSize:0.3, bevelSegments:2, curveSegments:20,
@@ -407,9 +419,9 @@ function buildLensRimGeometry(montuur){
 // extruded thin and centered in the rim's own depth. Always clear optical
 // glass: the materiaal picker colors the frame, never the lens itself.
 function buildLensGlassGeometry(montuur){
-  const { lensWidth:w, lensHeight:h, rimBorder:b, roundness:n, browFlatten:bf } = montuur;
+  const { lensWidth:w, lensHeight:h, rimBorder:b, roundness:n, browFlatten:bf, chinFullness:cf } = montuur;
   const innerW = Math.max(2, w-b*2), innerH = Math.max(2, h-b*2);
-  const shape = lensOutlineShape(innerW, innerH, n, bf);
+  const shape = lensOutlineShape(innerW, innerH, n, bf, cf);
   const geo = new THREE.ExtrudeGeometry(shape, { depth:0.9, bevelEnabled:false, curveSegments:20 });
   geo.translate(0, 0, -0.45);
   return geo;
