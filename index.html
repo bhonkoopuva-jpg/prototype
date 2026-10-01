@@ -408,7 +408,7 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
   // result doesn't look edge-to-edge cropped
   const sw = img.naturalWidth, sh = img.naturalHeight;
   const rimBudget = w * 0.36;
-  const scale = Math.min(rimBudget/sw, h*0.86/sh);
+  const scale = Math.min(rimBudget/sw, h*0.60/sh);
   const dw = sw*scale, dh = sh*scale;
   const dx = rimBudget - dw, dy = (h-dh)/2;
 
@@ -422,7 +422,7 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
   if(pootje.img){
     const pImg = loadMontuurImage(pootje.img);
     if(pImg.complete && pImg.naturalWidth > 0){
-      const pScale = Math.min(armBudget/pImg.naturalWidth, h*0.5/pImg.naturalHeight);
+      const pScale = Math.min(armBudget/pImg.naturalWidth, h*0.35/pImg.naturalHeight);
       const pdw = pImg.naturalWidth * pScale, pdh = pImg.naturalHeight * pScale;
       const pFrac = pootje.hingeFrac != null ? pootje.hingeFrac : 0.25;
       const pdx = hingeX, pdy = hingeY - pdh * pFrac;
@@ -432,11 +432,11 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
       // vector fallback (Pootje D has no photo) — scaled to fill the same
       // available width as a real pootje photo would, so it doesn't read
       // as "missing" next to the photographed options
-      drawPootjeArm(ctx, hingeX, hingeY, Math.min(armBudget/56, h*0.4/14), color, pootje.id);
+      drawPootjeArm(ctx, hingeX, hingeY, Math.min(armBudget/56, h*0.28/14), color, pootje.id);
       pImg.onload = ()=>{ if(state.pootje===pootje.id) drawPreview(); };
     }
   } else {
-    drawPootjeArm(ctx, hingeX, hingeY, Math.min(armBudget/56, h*0.4/14), color, pootje.id);
+    drawPootjeArm(ctx, hingeX, hingeY, Math.min(armBudget/56, h*0.28/14), color, pootje.id);
   }
   return true;
 }
