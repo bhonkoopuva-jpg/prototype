@@ -89,17 +89,16 @@
     transition:background .25s;
   }
   .stage-mountains{ position:absolute; left:0; right:0; bottom:0; height:38%; opacity:.5; pointer-events:none; }
-  .stage-pair{ position:absolute; inset:0; display:flex; padding:0 3%; }
-  .stage-single{ position:relative; flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; }
-  .stage-single canvas{ flex:1 1 auto; min-height:0; width:100%; margin-top:auto; cursor:zoom-in; }
-  .stage-single .angle-label{
-    flex:none; margin:.4rem 0 auto; font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  .stage-3d{ position:absolute; inset:0; }
+  .stage-3d canvas{ width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+  .stage-3d canvas:active{ cursor:grabbing; }
+  .drag-hint{
+    position:absolute; top:.9rem; left:50%; transform:translateX(-50%); z-index:2;
+    font-size:.68rem; font-weight:600; letter-spacing:.04em; color:var(--muted);
+    background:color-mix(in srgb, var(--surface) 80%, transparent); padding:.3rem .7rem; border-radius:999px;
+    pointer-events:none; transition:opacity .3s; opacity:.9;
   }
-  .stage-single canvas.loupe{
-    position:absolute; flex:none; width:160px; height:160px; min-height:160px; margin-top:0;
-    border-radius:50%; border:3px solid var(--surface); box-shadow:0 8px 24px rgba(0,0,0,.28);
-    pointer-events:none; display:none; z-index:5; background:var(--surface);
-  }
+  .drag-hint.faded{ opacity:0; }
 
   .stage-controls{
     position:absolute; left:50%; bottom:1.1rem; transform:translateX(-50%); z-index:3;
@@ -187,22 +186,19 @@
     </div>
 
     <div class="stage-card" id="previewStage">
-      <div class="stage-pair">
-        <div class="stage-single" id="stageVoor">
-          <canvas id="previewCanvasVoor" width="360" height="360"></canvas>
-          <span class="angle-label">Voor</span>
-          <canvas class="loupe" id="loupeVoor" width="300" height="300"></canvas>
-        </div>
-        <div class="stage-single" id="stageZij">
-          <canvas id="previewCanvasZij" width="360" height="360"></canvas>
-          <span class="angle-label">Zij</span>
-          <canvas class="loupe" id="loupeZij" width="300" height="300"></canvas>
-        </div>
+      <div class="stage-3d" id="stage3d">
+        <canvas id="previewCanvas3d"></canvas>
+        <span class="drag-hint" id="dragHint">Sleep om te draaien · scroll om te zoomen</span>
       </div>
       <div class="stage-controls">
+        <div class="pill-group" id="angleToggle">
+          <button data-angle="voor" class="active">Voor</button>
+          <button data-angle="zij">Zij</button>
+          <button data-angle="vrij">Vrij</button>
+        </div>
         <div class="zoom-group">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="range" id="zoomRange" min="80" max="160" value="100" aria-label="Zoom">
+          <input type="range" id="zoomRange" min="60" max="180" value="100" aria-label="Zoom">
         </div>
         <div class="pill-group" id="lightToggle">
           <button data-light="studio" class="active">Studio</button>
@@ -241,32 +237,45 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
-<script>
-/* ---------- configuration data (from the real Frame Studio) ---------- */
-/* zijCrop: the right-lens+hinge region of the montuur's own front (voor)
-   photo, as fractions of that photo — used to build the side view as the
-   front rim rotated partway toward a profile, instead of a separate true
-   side photo. hingeFrac is the vertical fraction *within that crop* where
-   the temple attaches. */
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+/* ======================================================================
+   MASTER MEASUREMENT + STANDARD HINGE INTERFACE
+   1 three.js unit = 1mm. Every montuur and every pootje is generated
+   against this one shared hinge point (HINGE) — not its own, independently
+   guessed, attachment spot — so any montuur can take any pootje with no
+   gaps, overlap, floating parts or mismatched angles. This is the
+   "STANDAARD SCHARNIER" the brief asks for: build it once, build every
+   part against it, never per-combination.
+   ====================================================================== */
+const HINGE = Object.freeze({
+  x: 70,   // mm from center-front — half of a realistic ~140mm frame width
+  y: 6,    // mm above the lens's own vertical center (hinges sit high)
+  z: 1.5,  // mm back from the rim's front face
+});
+const TEMPLE_LENGTH_MM = 140; // realistic adult temple length (135–145mm brief)
+
+/* ---------- configuration data ----------
+   Every montuur/pootje here is a real parametric 3D shape in millimeters,
+   not a photo — so scale is physically meaningful now and the same model
+   can later drive an AR try-on without being rebuilt. style/finish pick
+   the look; every numeric field is a real-world mm measurement. */
 const MONTUREN = [
-  { id:1, label:'Dodoma', price:45, voor:'assets/green-voor.jpg',
-    zijCrop:{ x0:0.456, y0:0.032, x1:0.966, y1:0.939 }, hingeFrac:0.274 },
-  { id:3, label:'Kuala Lumpur', price:45, voor:'assets/tortoise-voor.jpg',
-    zijCrop:{ x0:0.531, y0:0.021, x1:0.978, y1:0.966 }, hingeFrac:0.159 },
+  { id:1, label:'Dodoma', price:45, shape:'round', finish:'metal',
+    lensWidth:50, lensHeight:38, bridgeWidth:19, rimBorder:1.8, rimDepth:3, cornerRadius:15 },
+  { id:3, label:'Kuala Lumpur', price:45, shape:'square', finish:'acetate',
+    lensWidth:52, lensHeight:40, bridgeWidth:18, rimBorder:4.6, rimDepth:6, cornerRadius:6 },
 ];
 function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
-const montuurImgCache = {};
-function loadMontuurImage(src){
-  if(montuurImgCache[src]) return montuurImgCache[src];
-  const img = new Image();
-  img.src = src;
-  montuurImgCache[src] = img;
-  return img;
-}
+
 const POOTJES = [
-  { id:'A', label:'Dodoma', price:0, voor:'assets/green-pootje.jpg', img:'assets/green-pootje.jpg', hingeFrac:0.186 },
-  { id:'C', label:'Kuala Lumpur', price:0, voor:'assets/tortoise-pootje.jpg', img:'assets/tortoise-pootje.jpg', hingeFrac:0.076 },
+  { id:'A', label:'Dodoma', price:0, style:'thin', thickness:2.2, width:2.6, paddle:false },
+  { id:'C', label:'Kuala Lumpur', price:0, style:'bold', thickness:3.6, width:5.4, paddle:true },
 ];
+function getPootje(id){ return POOTJES.find(p=>p.id===id); }
+
 const MATERIALEN = [
   { id:'parelwit',   label:'Parelwit',   price:10, hex:'#F2EEE6' },
   { id:'transparant',label:'Transparant',price:10, hex:'#E4E2D9' },
@@ -277,18 +286,19 @@ const MATERIALEN = [
   { id:'bosgroen',   label:'Bosgroen',   price:10, hex:'#33503A' },
   { id:'nachtblauw', label:'Nachtblauw', price:10, hex:'#16283D' },
 ];
+function getMateriaal(id){ return MATERIALEN.find(m=>m.id===id); }
 
 let state = {
   montuur: 1,
   pootje: 'A',
   materiaal: 'nachtblauw',
-  view: 'voor',
   light: 'studio',
+  angle: 'voor',
 };
 
-function getMateriaal(id){ return MATERIALEN.find(m=>m.id===id); }
-
-/* ---------- glasses drawing (shared front/side) ---------- */
+/* ---------- simple vector glasses (unchanged) — used only for the live
+   webcam try-on overlay below, which draws on a flat 2D video frame and
+   has nothing to do with the 3D studio preview. ---------- */
 function drawGlassesFront(ctx, cx, cy, unitScale, color){
   ctx.save(); ctx.translate(cx, cy); ctx.scale(unitScale, unitScale);
   const lensW=58, lensH=40, rimW=9, gap=20, r=8;
@@ -309,230 +319,269 @@ function drawGlassesFront(ctx, cx, cy, unitScale, color){
   ctx.fillStyle=color; rr(-gap/2, -lensH/2+6, gap, 9, 4); ctx.fill();
   ctx.restore();
 }
-function drawGlassesSide(ctx, cx, cy, unitScale, color){
-  // simplified side-profile: one lens rim + a long temple arm receding to the right
-  ctx.save(); ctx.translate(cx, cy); ctx.scale(unitScale, unitScale);
-  ctx.fillStyle=color; ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.ellipse(0,0,26,20,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.beginPath(); ctx.ellipse(0,0,26-9,20-9,0,0,Math.PI*2); ctx.clip();
-  ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(-30,-30,60,60); ctx.restore();
-  ctx.beginPath(); ctx.moveTo(24,-6); ctx.quadraticCurveTo(70,-14,96,-2);
-  ctx.lineWidth=9; ctx.strokeStyle=color; ctx.lineCap='round'; ctx.stroke();
-  ctx.restore();
+
+/* ======================================================================
+   PARAMETRIC 3D GEOMETRY — frame + temples, built in real millimeters
+   against the shared HINGE point above. Nothing here is a photo or a
+   flat sprite: every part is real extruded/tubed 3D geometry, so it can
+   be viewed, lit and rotated from any angle, and reused as-is for a
+   future AR try-on. ====================================================================== */
+function roundedRectShape(w, h, r){
+  r = Math.min(r, w/2, h/2);
+  const s = new THREE.Shape();
+  const x = -w/2, y = -h/2;
+  s.moveTo(x+r, y);
+  s.lineTo(x+w-r, y);
+  s.quadraticCurveTo(x+w, y, x+w, y+r);
+  s.lineTo(x+w, y+h-r);
+  s.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  s.lineTo(x+r, y+h);
+  s.quadraticCurveTo(x, y+h, x, y+h-r);
+  s.lineTo(x, y+r);
+  s.quadraticCurveTo(x, y, x+r, y);
+  s.closePath();
+  return s;
 }
 
-/* ---- tint a real frame photo toward the selected material color ----
-   Keeps near-white background untouched, preserves luminance/texture (grain,
-   reflections) on the frame itself, and shifts its hue toward the target color.
-   This is an approximate live preview, not a photoreal material render. */
-function hexToRgb(hex){
-  const v = hex.replace('#','');
-  return [parseInt(v.slice(0,2),16), parseInt(v.slice(2,4),16), parseInt(v.slice(4,6),16)];
-}
-function drawTintedPhoto(ctx, img, w, h, color){
-  ctx.clearRect(0,0,w,h);
-  if(!img.complete || img.naturalWidth===0) return false;
-  // draw image centered, contained within the canvas with a little breathing
-  // room (a fraction smaller than edge-to-edge reads less cramped)
-  const scale = Math.min(w*0.9/img.naturalWidth, h*0.9/img.naturalHeight);
-  const dw = img.naturalWidth*scale, dh = img.naturalHeight*scale;
-  const dx = (w-dw)/2, dy = (h-dh)/2;
-  ctx.drawImage(img, dx, dy, dw, dh);
-  tintRect(ctx, dx, dy, dw, dh, color);
-  return true;
+// one lens rim (a ring: outer rounded-rect minus inner rounded-rect,
+// extruded front-to-back) — symmetric about its own local origin, so the
+// left lens is just a mirrored *position*, never a mirrored mesh.
+function buildLensRimGeometry(montuur){
+  const { lensWidth:w, lensHeight:h, rimBorder:b, rimDepth:d, cornerRadius:r } = montuur;
+  const outer = roundedRectShape(w, h, r);
+  const inner = roundedRectShape(Math.max(2,w-b*2), Math.max(2,h-b*2), Math.max(1, r-b));
+  outer.holes.push(inner);
+  const geo = new THREE.ExtrudeGeometry(outer, {
+    depth:d, bevelEnabled:true, bevelThickness:0.35, bevelSize:0.3, bevelSegments:2, curveSegments:20,
+  });
+  geo.translate(0, 0, -d/2);
+  return geo;
 }
 
-/* ---- pootje (temple arm) styles, drawn attached to the hinge point of the cropped photo ----
-   x,y = hinge point (right edge of the cropped frame photo, vertical mid), scale = px per unit */
-function drawPootjeArm(ctx, x, y, scale, color, style){
-  ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
-  ctx.fillStyle = color; ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 0.6;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-  if(style === 'A'){ // classic taper, gentle downward curve
-    ctx.beginPath(); ctx.moveTo(0,-3.2);
-    ctx.quadraticCurveTo(24,-6, 46,2);
-    ctx.quadraticCurveTo(50,4, 50,8);
-    ctx.quadraticCurveTo(50,4, 46,6);
-    ctx.quadraticCurveTo(24,-1, 0,3.2);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-  } else if(style === 'B'){ // thicker, straight, blunt tip
-    ctx.beginPath(); ctx.moveTo(0,-4.5);
-    ctx.lineTo(44,-3.5); ctx.lineTo(46,3.5); ctx.lineTo(0,4.5);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-  } else if(style === 'C'){ // pronounced curl / comfort hook at the end
-    ctx.beginPath(); ctx.moveTo(0,-3.2);
-    ctx.quadraticCurveTo(22,-5, 38,0);
-    ctx.quadraticCurveTo(46,3, 44,9);
-    ctx.quadraticCurveTo(42,13, 37,11);
-    ctx.quadraticCurveTo(41,7, 34,4);
-    ctx.quadraticCurveTo(20,0, 0,3.2);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-  } else { // D — thin wire, longer, minimal taper
-    ctx.beginPath(); ctx.moveTo(0,-1.6);
-    ctx.lineTo(52,-1.1); ctx.lineTo(54,1.1); ctx.lineTo(0,1.6);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-  }
-  ctx.restore();
+// bridge: a short arched tube between the two lenses' inner-top edges
+function buildBridgeGeometry(montuur){
+  const halfB = montuur.bridgeWidth/2;
+  const topY = montuur.lensHeight/2 - montuur.rimBorder - 3;
+  const curve = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(-halfB, topY, 0),
+    new THREE.Vector3(0, topY+3.2, 0),
+    new THREE.Vector3(halfB, topY, 0),
+  );
+  return new THREE.TubeGeometry(curve, 12, Math.max(0.9, montuur.rimBorder*0.5), 8, false);
 }
 
-/* tints the frame pixels toward the selected material color and makes the
-   photo's near-white background transparent (with a soft feather at the
-   boundary) so the stage's own gradient shows through instead of a white
-   box sitting on top of it */
-function tintRect(ctx, dx, dy, dw, dh, color){
-  const [tr,tg,tb] = hexToRgb(color);
-  // round outward (floor the top-left, ceil the bottom-right) rather than
-  // rounding dw/dh independently of dx/dy — otherwise the tinted/cutout
-  // region can land a fraction of a pixel short of what drawImage actually
-  // painted, leaving an untouched (opaque, un-tinted) sliver of the source
-  // photo's background visible as a stray line at larger scales
-  const x0 = Math.floor(dx), y0 = Math.floor(dy);
-  const x1 = Math.ceil(dx+dw), y1 = Math.ceil(dy+dh);
-  const rw = Math.max(1, x1-x0), rh = Math.max(1, y1-y0);
-  const frame = ctx.getImageData(x0, y0, rw, rh);
-  const d = frame.data;
-  for(let i=0;i<d.length;i+=4){
-    const r=d[i], g=d[i+1], b=d[i+2];
-    const whiteness = Math.min(r,g,b); // high = near-white background
-    if(whiteness > 250){ d[i+3] = 0; continue; }
-    if(whiteness > 225){ d[i+3] = Math.round(255 * (250-whiteness)/25); continue; }
-    const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
-    d[i]   = tr*lum + r*0.18;
-    d[i+1] = tg*lum + g*0.18;
-    d[i+2] = tb*lum + b*0.18;
-  }
-  ctx.putImageData(frame, x0, y0);
+// hinge stub: carries the rim's outer edge out to the STANDARD hinge X —
+// the literal, physical connector every pootje plugs into, built from the
+// same shared HINGE constants rather than anything montuur-specific.
+function buildHingeStubGeometry(montuur){
+  const lensEdgeX = montuur.bridgeWidth/2 + montuur.lensWidth;
+  const len = Math.max(1.5, (HINGE.x + 1.2) - lensEdgeX);
+  const geo = new THREE.BoxGeometry(len, Math.max(2.2, montuur.rimBorder*1.7), montuur.rimDepth*0.85);
+  geo.translate(lensEdgeX + len/2, HINGE.y, 0);
+  return geo;
 }
 
-/* ---- side view: instead of a separate true-profile photo, reuse the
-   montuur's own front photo — cropped to just the near (right) lens and
-   hinge — and squeeze it horizontally. That approximates the frame rotated
-   partway from a straight side angle back toward the front (rather than a
-   flat 90° profile), which is the look that was asked for: "30 graden
-   gedraaid richting vooraanzicht" starting from a side view. The squeeze
-   factor is cos(60°) = 0.5, i.e. a camera at 60° from front / 30° off a
-   pure 90° side. The pootje (a real cropped temple photo) is then attached
-   at the hinge point, aligned using each photo's own measured hinge height.
-   Falls back to a hand-drawn vector arm only for Pootje D, which has no
-   photo. ---- */
-const SIDE_ROTATION_SQUEEZE = 0.5; // cos(60°) — 30° off a pure side profile, toward front
-function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
-  ctx.clearRect(0,0,w,h);
-  if(!img.complete || img.naturalWidth===0) return false;
-
-  const crop = montuur.zijCrop;
-  const fullW = img.naturalWidth, fullH = img.naturalHeight;
-  const sx = crop.x0*fullW, sy = crop.y0*fullH;
-  const sw = (crop.x1-crop.x0)*fullW, sh = (crop.y1-crop.y0)*fullH;
-  const rimBudget = w * 0.16;
-
-  // match the rim's vertical size to how tall the frame renders in the
-  // front view (same scale drawTintedPhoto uses for montuur.voor) — a
-  // frame's height from brow to lens bottom doesn't change when rotated,
-  // so the two views should agree on that height
-  const voorScale = Math.min(w*0.9/fullW, h*0.9/fullH);
-  const targetDh = fullH * voorScale;
-  const scaleY = targetDh / sh;
-  const scaleX = scaleY * SIDE_ROTATION_SQUEEZE;
-
-  const dw = sw*scaleX, dh = sh*scaleY;
-  const dx = rimBudget - dw, dy = (h-dh)/2;
-
-  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
-  tintRect(ctx, dx, dy, dw, dh, color);
-
-  const hingeX = dx + dw;
-  const hingeY = dy + dh * (montuur.hingeFrac != null ? montuur.hingeFrac : 0.3);
-  const armBudget = w - hingeX - w*0.02;
-
-  if(pootje.img){
-    const pImg = loadMontuurImage(pootje.img);
-    if(pImg.complete && pImg.naturalWidth > 0){
-      const pScale = Math.min(armBudget/pImg.naturalWidth, h*0.60/pImg.naturalHeight);
-      const pdw = pImg.naturalWidth * pScale, pdh = pImg.naturalHeight * pScale;
-      const pFrac = pootje.hingeFrac != null ? pootje.hingeFrac : 0.25;
-      const pdx = hingeX, pdy = hingeY - pdh * pFrac;
-      ctx.drawImage(pImg, 0, 0, pImg.naturalWidth, pImg.naturalHeight, pdx, pdy, pdw, pdh);
-      tintRect(ctx, pdx, pdy, pdw, pdh, color);
-    } else {
-      // vector fallback (Pootje D has no photo) — scaled to fill the same
-      // available width as a real pootje photo would, so it doesn't read
-      // as "missing" next to the photographed options
-      drawPootjeArm(ctx, hingeX, hingeY, Math.min(armBudget/56, h*0.28/14), color, pootje.id);
-      pImg.onload = ()=>{ if(state.pootje===pootje.id) drawPreview(); };
+// pootje (temple arm): starts exactly at local origin (the hinge pivot),
+// runs backward (-Z) with a slight outward flare and a downward bend near
+// the ear — generated directly mirrored by `side` (1=right, -1=left) so
+// normals are never flipped via negative scale.
+function buildTempleGeometry(pootje, side){
+  const L = TEMPLE_LENGTH_MM;
+  const segs = 32, bendStart = 0.70;
+  const pts = [];
+  for(let i=0;i<=segs;i++){
+    const f = i/segs;
+    const z = -f*L;
+    const x = side * f*5; // 5mm outward flare over the full length
+    let y = -f*1.2; // gentle overall downward slope
+    if(f > bendStart){
+      const bf = (f-bendStart)/(1-bendStart);
+      y -= Math.pow(bf, 1.7) * 10; // comfort bend behind the ear
     }
-  } else {
-    drawPootjeArm(ctx, hingeX, hingeY, Math.min(armBudget/56, h*0.28/14), color, pootje.id);
+    pts.push(new THREE.Vector3(x,y,z));
   }
-  return true;
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const geo = new THREE.TubeGeometry(curve, 56, pootje.thickness/2, 8, false);
+  if(pootje.width > pootje.thickness){
+    geo.scale(pootje.width/pootje.thickness, 1, 1); // flatten into an oval/paddle cross-section
+  }
+  if(pootje.paddle){
+    const tip = pts[segs];
+    const paddle = new THREE.SphereGeometry(pootje.width*0.62, 10, 8);
+    paddle.scale(1, 0.55, 1.6);
+    paddle.translate(tip.x, tip.y - 1, tip.z - 2);
+    return mergeGeometries([geo, paddle]);
+  }
+  return geo;
 }
 
-/* ---------- configurator preview: front + side canvases, drawn together ---------- */
-const previewCanvasVoor = document.getElementById('previewCanvasVoor');
-const previewCanvasZij = document.getElementById('previewCanvasZij');
-const pvctxVoor = previewCanvasVoor.getContext('2d');
-const pvctxZij = previewCanvasZij.getContext('2d');
-const stageVoor = document.getElementById('stageVoor');
-const stageZij = document.getElementById('stageZij');
-
-/* ---- match the canvas's internal pixel buffer to its real on-screen size
-   (times devicePixelRatio) instead of the fixed 360x360 the HTML attributes
-   give it — otherwise the browser stretches a small bitmap up to fill the
-   much larger CSS box and everything looks soft/blurry. Drawing code keeps
-   working in CSS-pixel coordinates because we scale the context to match. */
-function fitCanvasToDisplay(canvas, ctx){
-  // Draw in actual device pixels (not a transformed CSS-pixel space) so
-  // getImageData/putImageData — which always read/write the real backing
-  // buffer and ignore ctx transforms — line up with what drawImage drew.
-  // The CSS width:100%/height:100% on the element then downscales this
-  // higher-res buffer for display, which is what makes it look sharp.
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  const w = Math.max(1, Math.round(rect.width * dpr));
-  const h = Math.max(1, Math.round(rect.height * dpr));
-  if(canvas.width !== w || canvas.height !== h){
-    canvas.width = w; canvas.height = h;
-  }
-  return { w, h };
+// minimal, dependency-free BufferGeometry merge (position+normal only —
+// all our parts share one material, so uv/index data isn't needed)
+function mergeGeometries(geos){
+  const merged = new THREE.BufferGeometry();
+  let totalPos = 0, totalNorm = 0;
+  geos.forEach(g=>{ totalPos += g.attributes.position.count; });
+  const positions = new Float32Array(totalPos*3);
+  const normals = new Float32Array(totalPos*3);
+  let offset = 0;
+  geos.forEach(g=>{
+    const p = g.attributes.position.array, n = g.attributes.normal ? g.attributes.normal.array : null;
+    positions.set(p, offset*3);
+    if(n) normals.set(n, offset*3);
+    offset += g.attributes.position.count;
+  });
+  merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  merged.computeVertexNormals();
+  return merged;
 }
 
-function drawOneAngle(canvas, ctx, montuur, src, color, fallbackDraw){
-  const img = loadMontuurImage(src);
-  const { w, h } = fitCanvasToDisplay(canvas, ctx);
-  const ok = drawTintedPhoto(ctx, img, w, h, color);
-  if(!ok){
-    ctx.clearRect(0,0,w,h);
-    fallbackDraw(ctx, w/2, h/2, h/138.5, color);
-    img.onload = ()=>{ if(getMontuur(state.montuur)===montuur) drawPreview(); };
-  }
+// assemble one full pair of glasses: montuur + pootje, combined dynamically
+// (never a pre-made per-combination model) and attached purely through HINGE
+function buildGlassesGroup(montuur, pootje, material){
+  const group = new THREE.Group();
+  const rimGeo = buildLensRimGeometry(montuur);
+  const bridgeGeo = buildBridgeGeometry(montuur);
+  const stubGeo = buildHingeStubGeometry(montuur);
+  const templeGeoR = buildTempleGeometry(pootje, 1);
+  const templeGeoL = buildTempleGeometry(pootje, -1);
+
+  const lensX = montuur.bridgeWidth/2 + montuur.lensWidth/2;
+  [1,-1].forEach(side=>{
+    const rim = new THREE.Mesh(rimGeo, material);
+    rim.position.x = side*lensX;
+    group.add(rim);
+
+    const stub = new THREE.Mesh(stubGeo, material);
+    stub.position.x = 0; // geometry already baked to the right-side X; mirror via scale for the box only (box is symmetric front/back so this is safe)
+    stub.scale.x = side;
+    group.add(stub);
+
+    const temple = new THREE.Mesh(side===1 ? templeGeoR : templeGeoL, material);
+    temple.position.set(side*HINGE.x, HINGE.y, HINGE.z);
+    group.add(temple);
+  });
+  group.add(new THREE.Mesh(bridgeGeo, material));
+  return group;
+}
+function disposeGroup(group){
+  group.traverse(obj=>{ if(obj.geometry) obj.geometry.dispose(); });
 }
 
-function drawZijAngle(canvas, ctx, montuur, color, pootje){
-  const img = loadMontuurImage(montuur.voor);
-  const { w, h } = fitCanvasToDisplay(canvas, ctx);
-  const ok = drawSideComposite(ctx, img, w, h, color, montuur, pootje);
-  if(!ok){
-    ctx.clearRect(0,0,w,h);
-    drawGlassesSide(ctx, w/2, h/2, h/138.5, color);
-    img.onload = ()=>{ if(getMontuur(state.montuur)===montuur) drawPreview(); };
-  }
-}
+/* ======================================================================
+   SCENE, CAMERA, LIGHTS, CONTROLS
+   ====================================================================== */
+const canvas3d = document.getElementById('previewCanvas3d');
+const renderer = new THREE.WebGLRenderer({ canvas:canvas3d, antialias:true, alpha:true, preserveDrawingBuffer:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+if('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-function drawPreview(){
-  const color = getMateriaal(state.materiaal).hex;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 1, 2000);
+const BASE_DIST = 230;
+camera.position.set(0, 6, BASE_DIST);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 120;
+controls.maxDistance = 420;
+controls.minPolarAngle = Math.PI*0.25;
+controls.maxPolarAngle = Math.PI*0.75;
+controls.target.set(0,0,0);
+controls.update();
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8370, 0.95);
+scene.add(hemi);
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+keyLight.position.set(120,180,220);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+fillLight.position.set(-150,80,-120);
+scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+rimLight.position.set(0,-60,-200);
+scene.add(rimLight);
+
+const sharedMaterial = new THREE.MeshPhysicalMaterial({
+  color:0x16283D, roughness:0.4, metalness:0.15, clearcoat:0.3, clearcoatRoughness:0.25,
+  side: THREE.DoubleSide, // the hinge stub is mirrored via negative scale for the left side,
+                           // which flips triangle winding — DoubleSide keeps it visible/lit correctly
+});
+
+let glassesGroup = null;
+function rebuildGlasses(){
+  if(glassesGroup){ scene.remove(glassesGroup); disposeGroup(glassesGroup); }
   const montuur = getMontuur(state.montuur);
-  const pootje = POOTJES.find(p=>p.id===state.pootje);
-  drawOneAngle(previewCanvasVoor, pvctxVoor, montuur, montuur.voor, color, drawGlassesFront);
-  drawZijAngle(previewCanvasZij, pvctxZij, montuur, color, pootje);
-
-  const bgVar = state.light === 'studio' ? '--stage-studio' : state.light === 'daylight' ? '--stage-daylight' : '--stage-pearl';
-  const bg = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
-  document.getElementById('previewStage').style.background =
-    `linear-gradient(180deg, ${bg}, color-mix(in srgb, ${bg} 70%, var(--olive)))`;
+  const pootje = getPootje(state.pootje);
+  const mat = getMateriaal(state.materiaal);
+  sharedMaterial.color.set(mat.hex);
+  sharedMaterial.roughness = montuur.finish==='metal' ? 0.3 : 0.55;
+  sharedMaterial.metalness = montuur.finish==='metal' ? 0.55 : 0.04;
+  sharedMaterial.clearcoat = montuur.finish==='metal' ? 0.15 : 0.45;
+  glassesGroup = buildGlassesGroup(montuur, pootje, sharedMaterial);
+  scene.add(glassesGroup);
 }
 
-/* ---------- price + ref code ---------- */
+function resizeRenderer(){
+  const rect = canvas3d.getBoundingClientRect();
+  const w = Math.max(1, Math.round(rect.width)), h = Math.max(1, Math.round(rect.height));
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resizeRenderer).observe(canvas3d);
+resizeRenderer();
+
+(function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+/* ---------- Voor / Zij / Vrij camera presets ---------- */
+const dragHint = document.getElementById('dragHint');
+function setAngleButton(name){
+  document.querySelectorAll('#angleToggle button').forEach(b=>b.classList.toggle('active', b.dataset.angle===name));
+}
+function setView(name){
+  state.angle = name;
+  setAngleButton(name);
+  if(name==='vrij') return;
+  const dist = camera.position.distanceTo(controls.target) || BASE_DIST;
+  const theta = name==='voor' ? 0 : Math.PI/2; // azimuth: 0=front, 90°=true side
+  const spherical = new THREE.Spherical(dist, Math.PI/2, theta);
+  camera.position.setFromSpherical(spherical).add(controls.target);
+  controls.update();
+}
+document.getElementById('angleToggle').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-angle]'); if(!btn) return;
+  setView(btn.dataset.angle);
+});
+controls.addEventListener('start', ()=>{
+  setAngleButton('vrij'); state.angle = 'vrij';
+  dragHint.classList.add('faded');
+});
+
+/* ---------- zoom slider (mirrors scroll/pinch zoom via camera distance) ---------- */
+const zoomRangeEl = document.getElementById('zoomRange');
+let syncingZoom = false;
+zoomRangeEl.addEventListener('input', ()=>{
+  const v = Number(zoomRangeEl.value);
+  const dist = THREE.MathUtils.clamp(BASE_DIST*100/v, controls.minDistance, controls.maxDistance);
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  syncingZoom = true;
+  camera.position.copy(controls.target).addScaledVector(dir, dist);
+  controls.update();
+  syncingZoom = false;
+});
+controls.addEventListener('change', ()=>{
+  if(syncingZoom) return;
+  const dist = camera.position.distanceTo(controls.target);
+  zoomRangeEl.value = THREE.MathUtils.clamp(Math.round(BASE_DIST*100/dist), 60, 180);
+});
+
+/* ---------- price + ref code + scene rebuild ---------- */
 function refresh(){
   const total = MONTUREN.find(m=>m.id===state.montuur).price
               + POOTJES.find(p=>p.id===state.pootje).price
@@ -542,11 +591,29 @@ function refresh(){
   const matCode = state.materiaal.slice(0,2).toUpperCase();
   document.getElementById('refCode').textContent = `Ref EW-${state.montuur}${state.pootje}-${matCode}VR00`;
 
-  drawPreview();
+  rebuildGlasses();
+  const bgVar = state.light === 'studio' ? '--stage-studio' : state.light === 'daylight' ? '--stage-daylight' : '--stage-pearl';
+  const bg = getComputedStyle(document.documentElement).getPropertyValue(bgVar);
+  document.getElementById('previewStage').style.background =
+    `linear-gradient(180deg, ${bg}, color-mix(in srgb, ${bg} 70%, var(--olive)))`;
+
   renderOptions();
   syncLiveColor();
 }
 
+/* ---------- small inline icons for the option chips (schematic, not
+   photos — these are generic style indicators, not renders of the 3D
+   model) ---------- */
+function montuurIcon(shape){
+  if(shape==='round') return '<svg viewBox="0 0 34 20" width="26" height="16"><g fill="none" stroke="#4a4238" stroke-width="2"><circle cx="9" cy="10" r="8"/><circle cx="25" cy="10" r="8"/><path d="M17 9h0"/></g></svg>';
+  return '<svg viewBox="0 0 34 20" width="26" height="16"><g fill="none" stroke="#4a4238" stroke-width="2"><rect x="1" y="2" width="14" height="16" rx="3"/><rect x="19" y="2" width="14" height="16" rx="3"/></g></svg>';
+}
+function pootjeIcon(style){
+  const w = style==='bold' ? 3.4 : 1.6;
+  return `<svg viewBox="0 0 34 14" width="26" height="12"><line x1="2" y1="3" x2="30" y2="10" stroke="#4a4238" stroke-width="${w}" stroke-linecap="round"/></svg>`;
+}
+
+/* ---------- price + ref code ---------- */
 /* ---------- option rows: Montuur / Pootjes / Materiaal, all visible at once ---------- */
 function renderRow(listId, items, selectedId, isColor, onPick){
   const list = document.getElementById(listId);
@@ -559,10 +626,10 @@ function renderRow(listId, items, selectedId, isColor, onPick){
     thumb.className = 'wheel-thumb' + (isColor ? ' swatch-dot' : '');
     if(isColor){
       thumb.style.background = item.hex;
-    } else if(item.voor){
-      const img = document.createElement('img');
-      img.src = item.voor; img.alt = item.label;
-      thumb.appendChild(img);
+    } else if(item.shape){
+      thumb.innerHTML = montuurIcon(item.shape);
+    } else if(item.style){
+      thumb.innerHTML = pootjeIcon(item.style);
     }
     chip.appendChild(thumb);
 
@@ -582,53 +649,6 @@ function renderOptions(){
   renderRow('materiaalRow', MATERIALEN, state.materiaal, true, id=>{ state.materiaal = id; });
 }
 
-/* ---------- zoom: slider sets a base zoom level, hovering over either
-   preview on top of that magnifies further around the cursor position ---- */
-const zoomRangeEl = document.getElementById('zoomRange');
-function applyZoom(canvas){
-  const base = Number(zoomRangeEl.value) / 100;
-  canvas.style.transform = `scale(${base})`;
-}
-zoomRangeEl.addEventListener('input', ()=>{
-  applyZoom(previewCanvasVoor);
-  applyZoom(previewCanvasZij);
-});
-
-/* ---- magnifier: a small round loupe that follows the cursor and shows a
-   zoomed-in crop of the image right under it, like a physical magnifying
-   glass, instead of scaling the whole preview ---- */
-function setupLoupe(panel, sourceCanvas, loupeCanvas){
-  const lctx = loupeCanvas.getContext('2d');
-  const MAG = 2.4; // how much bigger the loupe shows things vs. normal size
-  const loupeCss = 160; // matches the .loupe CSS width/height
-
-  function draw(e){
-    const srcRect = sourceCanvas.getBoundingClientRect();
-    const mx = e.clientX - srcRect.left, my = e.clientY - srcRect.top;
-    if(mx < 0 || my < 0 || mx > srcRect.width || my > srcRect.height){
-      loupeCanvas.style.display = 'none';
-      return;
-    }
-    const panelRect = panel.getBoundingClientRect();
-    loupeCanvas.style.display = 'block';
-    loupeCanvas.style.left = (e.clientX - panelRect.left - loupeCss/2) + 'px';
-    loupeCanvas.style.top = (e.clientY - panelRect.top - loupeCss/2) + 'px';
-
-    const pxPerCss = sourceCanvas.width / srcRect.width; // device px per CSS px
-    const deviceX = mx * pxPerCss, deviceY = my * pxPerCss;
-    const regionDevice = (loupeCss / MAG) * pxPerCss;
-    const sx = Math.max(0, Math.min(sourceCanvas.width - regionDevice, deviceX - regionDevice/2));
-    const sy = Math.max(0, Math.min(sourceCanvas.height - regionDevice, deviceY - regionDevice/2));
-
-    lctx.clearRect(0, 0, loupeCanvas.width, loupeCanvas.height);
-    lctx.drawImage(sourceCanvas, sx, sy, regionDevice, regionDevice, 0, 0, loupeCanvas.width, loupeCanvas.height);
-  }
-  panel.addEventListener('mousemove', draw);
-  panel.addEventListener('mouseleave', ()=>{ loupeCanvas.style.display = 'none'; });
-}
-setupLoupe(document.getElementById('stageVoor'), previewCanvasVoor, document.getElementById('loupeVoor'));
-setupLoupe(document.getElementById('stageZij'), previewCanvasZij, document.getElementById('loupeZij'));
-
 /* ---------- light toggle ---------- */
 document.getElementById('lightToggle').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-light]'); if(!btn) return;
@@ -645,11 +665,11 @@ function showToast(msg){
   showToast._t = setTimeout(()=> t.classList.remove('show'), 2200);
 }
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  state = { montuur:1, pootje:'A', materiaal:'nachtblauw', view:'voor', light:'studio' };
+  state = { montuur:1, pootje:'A', materiaal:'nachtblauw', light:'studio', angle:'voor' };
   document.querySelectorAll('#lightToggle button').forEach(b=>b.classList.toggle('active', b.dataset.light==='studio'));
   document.getElementById('zoomRange').value = 100;
-  previewCanvasVoor.style.transform = 'scale(1)';
-  previewCanvasZij.style.transform = 'scale(1)';
+  setView('voor');
+  dragHint.classList.remove('faded');
   refresh();
   showToast('Ontwerp gereset');
 });
@@ -693,11 +713,6 @@ function resizeLiveCanvas(){
   liveCanvas.width = rect.width; liveCanvas.height = rect.height;
 }
 window.addEventListener('resize', resizeLiveCanvas);
-let previewResizeTimer = null;
-window.addEventListener('resize', ()=>{
-  clearTimeout(previewResizeTimer);
-  previewResizeTimer = setTimeout(drawPreview, 120);
-});
 
 async function startCamera(){
   try{
