@@ -414,7 +414,21 @@ function drawSideComposite(ctx, img, w, h, color, montuur, pootje){
   // result doesn't look edge-to-edge cropped
   const sw = img.naturalWidth, sh = img.naturalHeight;
   const rimBudget = w * 0.16;
-  const scale = Math.min(rimBudget/sw, h*0.40/sh);
+
+  // match the rim's vertical size to how tall the frame renders in the
+  // front view (same scale drawTintedPhoto uses for montuur.voor) — a
+  // frame's height from brow to lens bottom doesn't change when you walk
+  // around to its side, so the two views should agree on that height
+  // instead of the rim being sized off its own crop's budget
+  const voorImg = loadMontuurImage(montuur.voor);
+  let scale;
+  if(voorImg.complete && voorImg.naturalWidth > 0){
+    const voorScale = Math.min(w*0.9/voorImg.naturalWidth, h*0.9/voorImg.naturalHeight);
+    const targetDh = voorImg.naturalHeight * voorScale;
+    scale = targetDh / sh;
+  } else {
+    scale = Math.min(rimBudget/sw, h*0.40/sh);
+  }
   const dw = sw*scale, dh = sh*scale;
   const dx = rimBudget - dw, dy = (h-dh)/2;
 
