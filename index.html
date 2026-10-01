@@ -322,31 +322,56 @@ const TEMPLE_LENGTH_MM = 140; // fallback only, used when a pootje has no
    informed estimates no matter how good the physical measurements get,
    and would need an actual 3D scan or a second camera angle to fix. */
 const MONTUREN = [
-  // Dodoma = green-voor.jpg. lensContour is the measured, symmetric-
-  // averaged lens-hole silhouette (47mm wide at the calibrated scale —
-  // see the module header above for why that absolute number is still an
-  // assumption, not a measurement). rimBorder/rimDepth/bridgeWidth are
-  // not visible as a separate, isolatable contour in the photo at this
-  // resolution, so those stay informed estimates (very thin wire, as the
-  // photo clearly shows) rather than measurements.
+  // Dodoma = green-voor.jpg. Both lensContour (inner, the lens-hole
+  // silhouette) AND frameOuterContour (outer, the frame's own outer
+  // silhouette) are now real traced measurements — not a shape plus a
+  // uniform offset guess. They were extracted together from the same
+  // frame-material mask (threshold on saturation+value against the white
+  // background → morphological close → contour hierarchy: the frame's
+  // outer silhouette is the parent contour, each lens-hole is a child
+  // "hole" contour of it — so inner and outer come from ONE mask,
+  // structurally consistent with each other, not reconstructed from one
+  // another). Both were then symmetric-averaged (left mirrored onto
+  // right) with the same angular correspondence, so
+  // frameOuterContour[i]-lensContour[i] at every point is this frame's
+  // actual, non-uniform rim thickness — not a single rimBorder scalar.
+  // One exception: near the hinge corner, the frame's silhouette blends
+  // continuously into the temple arm with no visible boundary in a front
+  // photo, so that narrow angular span falls back to this frame's own
+  // median rim thickness rather than an unmeasurable/implausible value
+  // (see build_inner_outer_mm.py in the extraction scratch work — this
+  // is the one place a photo genuinely cannot resolve the true shape,
+  // flagged rather than invented, same principle as everywhere else in
+  // this file). rimBorder below is now a DERIVED value (this frame's own
+  // measured mean thickness, ~0.9mm — thin wire, as the photo shows),
+  // kept only for the bridge tube and hinge-stub box, which have no
+  // contour of their own to measure; rimDepth (front-to-back) still
+  // isn't visible in a flat front photo at all, so it stays an estimate.
   { id:1, label:'Dodoma', price:45, shape:'round', finish:'metal',
-    bridgeWidth:20, rimBorder:1.5, rimDepth:2.6,
+    bridgeWidth:20, rimBorder:0.9, rimDepth:2.6,
     // Real caliper measurements of the physical product (mm). Fill these
     // in from the actual item, not an estimate — see the header comment
     // above. Until then every field stays null and the renderer falls
-    // back to this lensContour's own calibration anchor (~47×40.8mm).
+    // back to this lensContour's own calibration anchor (~47×43.4mm).
     REAL_WORLD_DIMENSIONS:{ frameWidth:null, frameHeight:null, bridgeWidth:null, lensWidth:null, lensHeight:null },
-    lensContour:[[23.241,-0],[22.423,-2.952],[21.635,-5.797],[20.08,-8.317],[18.52,-10.693],[16.984,-13.032],[15.19,-15.19],[12.983,-16.92],[10.771,-18.655],[8.077,-19.499],[5.374,-20.056],[2.685,-20.397],[0,-20.277],[-2.653,-20.151],[-5.315,-19.836],[-8.068,-19.478],[-10.739,-18.601],[-13.249,-17.267],[-15.63,-15.63],[-17.465,-13.402],[-19.259,-11.119],[-21.121,-8.749],[-22.11,-5.924],[-22.9,-3.015],[-23.551,-0],[-23.471,3.09],[-23.389,6.267],[-23.234,9.624],[-22.195,12.814],[-20.474,15.71],[-17.907,17.907],[-14.585,19.008],[-11.478,19.88],[-8.338,20.129],[-5.424,20.242],[-2.679,20.348],[-0,20.452],[2.665,20.243],[5.317,19.843],[8.049,19.431],[10.965,18.991],[13.825,18.017],[16.738,16.738],[19.653,15.08],[21.735,12.549],[23.049,9.547],[23.256,6.231],[23.449,3.087]] },
-  // Kuala Lumpur = tortoise-voor.jpg. Same measurement process; lensContour
-  // is 42.4mm wide at the calibrated scale.
+    lensContour:[[22.546,-0],[22.186,-2.185],[21.657,-4.308],[20.982,-6.365],[20.127,-8.337],[19.12,-10.22],[17.996,-12.024],[16.756,-13.751],[15.385,-15.385],[13.898,-16.935],[12.27,-18.364],[10.478,-19.603],[8.512,-20.549],[6.422,-21.17],[4.279,-21.51],[2.133,-21.655],[0,-21.688],[-2.131,-21.637],[-4.275,-21.49],[-6.434,-21.209],[-8.604,-20.771],[-10.751,-20.113],[-12.835,-19.209],[-14.779,-18.008],[-16.568,-16.568],[-18.194,-14.931],[-19.7,-13.163],[-21.042,-11.247],[-22.181,-9.187],[-23.062,-6.996],[-23.683,-4.711],[-24.062,-2.37],[-24.235,-0],[-24.27,2.39],[-24.194,4.813],[-23.909,7.253],[-23.382,9.685],[-22.469,12.01],[-21.134,14.121],[-19.278,15.821],[-17.053,17.053],[-14.658,17.861],[-12.284,18.385],[-10.008,18.723],[-7.839,18.925],[-5.769,19.019],[-3.787,19.039],[-1.873,19.018],[-0,18.954],[1.855,18.837],[3.71,18.652],[5.584,18.407],[7.492,18.087],[9.448,17.677],[11.46,17.15],[13.51,16.462],[15.561,15.561],[17.519,14.378],[19.262,12.871],[20.664,11.045],[21.676,8.979],[22.322,6.771],[22.656,4.507],[22.73,2.239]],
+    frameOuterContour:[[23.777,-0],[23.345,-2.299],[22.668,-4.509],[21.832,-6.623],[20.867,-8.643],[19.812,-10.59],[18.643,-12.457],[17.362,-14.249],[15.945,-15.945],[14.402,-17.549],[12.704,-19.013],[10.844,-20.287],[8.811,-21.271],[6.656,-21.941],[4.441,-22.329],[2.218,-22.52],[0,-22.572],[-2.218,-22.521],[-4.448,-22.361],[-6.694,-22.068],[-8.955,-21.62],[-11.188,-20.931],[-13.356,-19.989],[-15.373,-18.733],[-17.242,-17.242],[-18.934,-15.539],[-20.495,-13.695],[-21.879,-11.694],[-23.054,-9.549],[-23.972,-7.272],[-24.62,-4.897],[-25.018,-2.464],[-25.18,-0],[-25.197,2.482],[-25.09,4.991],[-24.783,7.518],[-24.226,10.035],[-23.244,12.424],[-21.837,14.591],[-19.909,16.339],[-17.642,17.642],[-15.196,18.517],[-12.765,19.104],[-10.417,19.488],[-8.172,19.73],[-6.023,19.856],[-3.958,19.899],[-1.959,19.887],[-0,19.824],[1.94,19.699],[3.88,19.508],[5.838,19.245],[7.833,18.911],[9.877,18.478],[11.98,17.929],[14.117,17.202],[16.255,16.255],[18.264,14.989],[20.046,13.394],[21.47,11.476],[22.52,9.328],[23.197,7.037],[23.66,4.706],[23.853,2.349]] },
+  // Kuala Lumpur = tortoise-voor.jpg. Same dual inner+outer measurement.
+  // The outer contour directly captures what the photo clearly shows and
+  // the old uniform-offset model could not: a visibly thicker acetate
+  // browline tapering to a notably thinner bottom edge (measured
+  // ~3.3mm → ~1.9mm around the rim, not one constant 4.8mm). rimBorder
+  // below is this frame's own measured mean (~2.5mm), kept only for the
+  // bridge tube / hinge-stub box as before.
   { id:3, label:'Kuala Lumpur', price:45, shape:'square', finish:'acetate',
-    bridgeWidth:17, rimBorder:4.8, rimDepth:6.2,
+    bridgeWidth:17, rimBorder:2.5, rimDepth:6.2,
     // Real caliper measurements of the physical product (mm). Fill these
     // in from the actual item, not an estimate — see the header comment
     // above. Until then every field stays null and the renderer falls
-    // back to this lensContour's own calibration anchor (~42.4×32.8mm).
+    // back to this lensContour's own calibration anchor (~42.4×33.6mm).
     REAL_WORLD_DIMENSIONS:{ frameWidth:null, frameHeight:null, bridgeWidth:null, lensWidth:null, lensHeight:null },
-    lensContour:[[20.441,-0],[19.611,-2.582],[18.73,-5.019],[17.44,-7.224],[16.143,-9.32],[14.502,-11.128],[12.72,-12.72],[10.66,-13.892],[8.602,-14.899],[6.473,-15.628],[4.278,-15.967],[2.146,-16.297],[0,-16.354],[-2.149,-16.32],[-4.359,-16.27],[-6.589,-15.906],[-8.957,-15.515],[-11.403,-14.861],[-13.884,-13.884],[-15.963,-12.249],[-17.927,-10.35],[-19.03,-7.882],[-19.896,-5.331],[-20.385,-2.684],[-20.735,-0],[-21.022,2.768],[-21.225,5.687],[-21.169,8.769],[-20.359,11.754],[-18.557,14.239],[-15.525,15.525],[-12.438,16.209],[-9.401,16.283],[-6.771,16.348],[-4.396,16.406],[-2.167,16.46],[-0,16.307],[2.116,16.075],[4.245,15.842],[6.462,15.599],[8.855,15.337],[11.313,14.743],[13.935,13.935],[16.95,13.006],[19.633,11.335],[21.175,8.771],[21.167,5.672],[20.918,2.754]] },
+    lensContour:[[19.944,-0],[19.457,-1.916],[18.841,-3.748],[18.092,-5.488],[17.216,-7.131],[16.239,-8.68],[15.166,-10.134],[14.001,-11.49],[12.715,-12.715],[11.307,-13.778],[9.794,-14.657],[8.211,-15.362],[6.588,-15.905],[4.946,-16.305],[3.301,-16.593],[1.653,-16.786],[0,-16.884],[-1.665,-16.904],[-3.352,-16.851],[-5.075,-16.731],[-6.846,-16.528],[-8.674,-16.229],[-10.552,-15.792],[-12.453,-15.174],[-14.331,-14.331],[-16.084,-13.2],[-17.631,-11.781],[-18.874,-10.088],[-19.759,-8.184],[-20.347,-6.172],[-20.742,-4.126],[-21.095,-2.078],[-21.397,-0],[-21.642,2.132],[-21.793,4.335],[-21.784,6.608],[-21.519,8.913],[-20.797,11.116],[-19.462,13.004],[-17.488,14.352],[-15.179,15.179],[-12.799,15.595],[-10.566,15.813],[-8.493,15.889],[-6.593,15.916],[-4.826,15.908],[-3.158,15.876],[-1.558,15.819],[-0,15.734],[1.538,15.616],[3.076,15.465],[4.637,15.288],[6.246,15.08],[7.923,14.824],[9.688,14.5],[11.55,14.074],[13.513,13.513],[15.546,12.758],[17.527,11.711],[19.184,10.254],[20.213,8.373],[20.607,6.251],[20.553,4.088],[20.316,2.001]],
+    frameOuterContour:[[23.348,-0],[22.531,-2.219],[21.548,-4.286],[20.526,-6.227],[19.447,-8.055],[18.308,-9.786],[17.085,-11.416],[15.757,-12.932],[14.297,-14.297],[12.707,-15.484],[11.006,-16.472],[9.226,-17.26],[7.396,-17.855],[5.545,-18.28],[3.693,-18.565],[1.846,-18.743],[0,-18.818],[-1.854,-18.822],[-3.73,-18.751],[-5.642,-18.6],[-7.6,-18.347],[-9.621,-17.999],[-11.702,-17.514],[-13.82,-16.839],[-15.905,-15.905],[-17.839,-14.64],[-19.517,-13.041],[-20.854,-11.146],[-21.826,-9.041],[-22.542,-6.838],[-23.089,-4.593],[-23.609,-2.325],[-24.078,-0],[-24.515,2.414],[-24.876,4.948],[-25.123,7.621],[-24.553,10.17],[-23.423,12.52],[-21.552,14.4],[-19.43,15.946],[-16.956,16.956],[-14.482,17.647],[-12.095,18.101],[-9.82,18.371],[-7.628,18.417],[-5.586,18.414],[-3.655,18.376],[-1.804,18.316],[-0,18.222],[1.782,18.093],[3.564,17.917],[5.371,17.706],[7.226,17.444],[9.147,17.113],[11.156,16.695],[13.273,16.173],[15.552,15.552],[17.728,14.549],[19.788,13.222],[21.4,11.439],[22.535,9.334],[23.012,6.981],[23.398,4.654],[23.528,2.317]] },
 ];
 function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
 
@@ -393,32 +418,6 @@ function contourBounds(points){
   return { minX,maxX,minY,maxY, w:maxX-minX, h:maxY-minY };
 }
 
-// offset a (roughly convex, as ours are post-convexHull) closed polygon
-// outward by `dist` mm, via each vertex's averaged adjacent-edge normal —
-// used to build the rim's OUTER boundary from the measured lensContour,
-// which is the rim's INNER boundary (only the inner edge — where the
-// glass sits — is cleanly isolatable from the photo; the outer edge is
-// reconstructed from it plus the rim thickness rather than traced
-// separately).
-function offsetContour(points, dist){
-  const n = points.length;
-  const out = [];
-  for(let i=0;i<n;i++){
-    const [px,py] = points[(i-1+n)%n], [cx,cy] = points[i], [nx,ny] = points[(i+1)%n];
-    const e1x=cx-px, e1y=cy-py, e2x=nx-cx, e2y=ny-cy;
-    const len1=Math.hypot(e1x,e1y)||1, len2=Math.hypot(e2x,e2y)||1;
-    // outward normal of each edge — our traced contours run clockwise
-    // (verified via shoelace sign), so the outward normal of an edge
-    // (ex,ey) is (-ey,ex)
-    const n1x=-e1y/len1, n1y=e1x/len1, n2x=-e2y/len2, n2y=e2x/len2;
-    let avgx=n1x+n2x, avgy=n1y+n2y;
-    const avgLen=Math.hypot(avgx,avgy)||1;
-    avgx/=avgLen; avgy/=avgLen;
-    out.push([cx+avgx*dist, cy+avgy*dist]);
-  }
-  return out;
-}
-
 /* ======================================================================
    SHAPE → SCALE: turn the pixel-measured contours above into true real-
    world millimeters, using REAL_WORLD_DIMENSIONS. This is the one place
@@ -456,11 +455,11 @@ function montuurScaleFactors(montuur){
   };
   if(rwd.bridgeWidth) warn('bridgeWidth', rwd.bridgeWidth, montuur.bridgeWidth*sx);
   if(rwd.frameWidth){
-    const outerW = contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).w;
+    const outerW = contourBounds(montuur.frameOuterContour).w;
     warn('frameWidth', rwd.frameWidth, montuur.bridgeWidth*sx + 2*outerW*sx);
   }
   if(rwd.frameHeight){
-    const outerH = contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).h;
+    const outerH = contourBounds(montuur.frameOuterContour).h;
     warn('frameHeight', rwd.frameHeight, outerH*sy);
   }
   if(!measured){
@@ -482,6 +481,7 @@ function scaledMontuur(montuur){
   return {
     ...montuur,
     lensContour: montuur.lensContour.map(([x,y]) => [x*sx, y*sy]),
+    frameOuterContour: montuur.frameOuterContour.map(([x,y]) => [x*sx, y*sy]),
     bridgeWidth: montuur.bridgeWidth * sx,
     rimBorder: montuur.rimBorder * sAvg,
     rimDepth: montuur.rimDepth * sAvg,
@@ -563,15 +563,16 @@ function shapeFromContour(points){
   return s;
 }
 
-// one lens rim (a ring: outer boundary minus the measured inner lens-hole
-// contour, extruded front-to-back) — symmetric about its own local origin,
-// so the left lens is just a mirrored *position*, never a mirrored mesh.
-// The outer boundary is the measured contour offset outward by rimBorder
-// (see offsetContour above for why — only the inner edge is cleanly
-// traceable from the photo).
+// one lens rim (a ring: the measured OUTER frame silhouette minus the
+// measured INNER lens-hole contour, extruded front-to-back) — symmetric
+// about its own local origin, so the left lens is just a mirrored
+// *position*, never a mirrored mesh. Both boundaries are now real traced
+// measurements from the same photo mask (see the MONTUREN header
+// comment) — the ring's width therefore follows the frame's actual,
+// non-uniform rim thickness at every point, not a uniform offset.
 function buildLensRimGeometry(montuur){
-  const { lensContour, rimBorder:b, rimDepth:d } = montuur;
-  const outer = shapeFromContour(offsetContour(lensContour, b));
+  const { lensContour, frameOuterContour, rimDepth:d } = montuur;
+  const outer = shapeFromContour(frameOuterContour);
   const inner = shapeFromContour(lensContour);
   outer.holes.push(inner);
   const geo = new THREE.ExtrudeGeometry(outer, {
@@ -609,10 +610,11 @@ function buildBridgeGeometry(montuur){
 // hinge stub: carries the rim's outer edge out to the STANDARD hinge X —
 // the literal, physical connector every pootje plugs into, built from the
 // same shared HINGE constants rather than anything montuur-specific.
-// lensEdgeX now comes from the measured (and rim-offset) contour's own
-// bounding box rather than a stored lensWidth field.
+// lensEdgeX now comes directly from the measured frameOuterContour's own
+// bounding box rather than a stored lensWidth field or a reconstructed
+// offset.
 function buildHingeStubGeometry(montuur){
-  const outerW = contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).w;
+  const outerW = contourBounds(montuur.frameOuterContour).w;
   const lensEdgeX = montuur.bridgeWidth/2 + outerW;
   const len = Math.max(1.5, (HINGE.x + 1.2) - lensEdgeX);
   // z-depth must reach past HINGE.z (where every temple's local origin sits)
@@ -697,7 +699,7 @@ function buildGlassesGroup(montuur, pootje, material, lensMaterial){
   const templeGeoR = buildTempleGeometry(pootje, 1);
   const templeGeoL = buildTempleGeometry(pootje, -1);
 
-  const lensX = montuur.bridgeWidth/2 + contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).w/2;
+  const lensX = montuur.bridgeWidth/2 + contourBounds(montuur.frameOuterContour).w/2;
   [1,-1].forEach(side=>{
     const rim = new THREE.Mesh(rimGeo, material);
     rim.position.x = side*lensX;
