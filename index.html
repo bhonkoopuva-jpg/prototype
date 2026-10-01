@@ -348,6 +348,7 @@ const MONTUREN = [
   // contour of their own to measure; rimDepth (front-to-back) still
   // isn't visible in a flat front photo at all, so it stays an estimate.
   { id:1, label:'Dodoma', price:45, shape:'round', finish:'metal',
+    defaultMateriaal:'leisteen', // the measured colour of this exact product photo
     bridgeWidth:20, rimBorder:0.9, rimDepth:2.6,
     // Real caliper measurements of the physical product (mm). Fill these
     // in from the actual item, not an estimate — see the header comment
@@ -364,6 +365,7 @@ const MONTUREN = [
   // below is this frame's own measured mean (~2.5mm), kept only for the
   // bridge tube / hinge-stub box as before.
   { id:3, label:'Kuala Lumpur', price:45, shape:'square', finish:'acetate',
+    defaultMateriaal:'schildpad', // the measured tortoiseshell colour/texture of this exact product photo
     bridgeWidth:17, rimBorder:2.5, rimDepth:6.2,
     // Real caliper measurements of the physical product (mm). Fill these
     // in from the actual item, not an estimate — see the header comment
@@ -405,6 +407,54 @@ const POOTJES = [
     curvePoints:[[0,-0],[-4.72,-1.6],[-7.01,-1.71],[-11.86,-1.93],[-16.57,-2.36],[-18.86,-3.14],[-23.72,-3.28],[-28.43,-3.25],[-30.72,-3.27],[-35.57,-3.36],[-40.29,-3.5],[-45,-3.78],[-47.43,-3.94],[-52.15,-4.32],[-56.86,-4.79],[-59.29,-5.08],[-64,-5.73],[-68.72,-6.46],[-71.15,-6.85],[-75.86,-7.05],[-80.58,-7.43],[-83,-7.69],[-87.72,-8.31],[-92.44,-9.18],[-94.86,-9.75],[-99.58,-11.24],[-104.29,-13.36],[-109.14,-16.62],[-111.43,-18.61],[-116.15,-23.55],[-121,-27.04],[-123.29,-28.56],[-128.01,-31.68],[-132.86,-35.01],[-135.15,-36.92],[-140,-39.48]] },
 ];
 function getPootje(id){ return POOTJES.find(p=>p.id===id); }
+
+/* ======================================================================
+   DATA PROVENANCE — per instruction: never invent a value for something a
+   photo can't resolve; label it instead. Every field that drives the
+   geometry/appearance is tagged GEMETEN (measured from the photo),
+   AANGENOMEN (an informed estimate standing in for a real measurement we
+   don't have yet), or ONBEKEND (this photo angle genuinely cannot resolve
+   it — would need another photo or a physical measurement). Logged to the
+   console on load so it's inspectable without reading the source, and
+   kept as one small function (not duplicated per montuur) so adding a
+   real measurement anywhere automatically flips its own status here too.
+   ====================================================================== */
+function getMontuurProvenance(montuur){
+  const rwd = montuur.REAL_WORLD_DIMENSIONS || {};
+  const hasAnyRealMeasurement = !!(rwd.lensWidth || rwd.lensHeight || rwd.frameWidth || rwd.frameHeight || rwd.bridgeWidth);
+  return {
+    'Lenscontour (vorm)':            'GEMETEN — OpenCV contourdetectie op de foto',
+    'Frame buitencontour (vorm)':    'GEMETEN — OpenCV contourdetectie op de foto',
+    'Frame thickness (variatie)':    'GEMETEN — afstand buiten-/binnencontour per hoek, met AANGENOMEN gemiddelde nabij het scharnier (geen zichtbare grens met het pootje op een voorfoto)',
+    'Kleur':                         'GEMETEN/GEANALYSEERD — pixel-sampling op de foto (mediaan, highlights/schaduw uitgesloten)',
+    'Absolute schaal (mm)':          hasAnyRealMeasurement ? 'GEMETEN — REAL_WORLD_DIMENSIONS' : 'AANGENOMEN — gekalibreerd op een realistische brilmaat; geen liniaal/referentieobject in de foto',
+    'Bridge-/neusbrugvorm':          'AANGENOMEN — niet los van het frame isoleerbaar op deze foto',
+    'Frame depth (voor-achter)':     'ONBEKEND — niet zichtbaar op een platte voorfoto',
+    'Lenskromming':                  'ONBEKEND — niet zichtbaar op een platte voorfoto',
+    'Glans/roughness':               'AANGENOMEN — op basis van materiaaltype (metaal/acetaat), niet gemeten uit de foto',
+  };
+}
+function getPootjeProvenance(pootje){
+  const rwd = pootje.REAL_WORLD_DIMENSIONS || {};
+  return {
+    'Curve/pad (centerlijn)':        'GEMETEN — kolom-voor-kolom randscan op de foto',
+    'Dikte / breedte / taps verloop':'AANGENOMEN — foto-signaal te ruizig door perspectiefvervorming op het gebogen deel (opnieuw geprobeerd, bevestigd onbruikbaar)',
+    'Vorm uiteinde':                 'AANGENOMEN',
+    'Flare (naar buiten staan)':     'ONBEKEND — niet zichtbaar op een platte zijfoto',
+    'Absolute lengte (mm)':          rwd.templeLength ? 'GEMETEN — REAL_WORLD_DIMENSIONS' : 'AANGENOMEN — 140mm schatting; geen liniaal in de foto',
+  };
+}
+function logProvenance(){
+  if(typeof console === 'undefined' || !console.table) return;
+  console.group('%cEveryWear — databron per onderdeel (GEMETEN / AANGENOMEN / ONBEKEND)', 'font-weight:bold');
+  for(const m of MONTUREN){ console.group(m.label); console.table(getMontuurProvenance(m)); console.groupEnd(); }
+  for(const p of POOTJES){ console.group(p.label+' (pootje)'); console.table(getPootjeProvenance(p)); console.groupEnd(); }
+  console.group('Schildpad-materiaal (textuur)');
+  console.table({ 'Patroon/textuur': 'GEMETEN/GEANALYSEERD — crop uit tortoise-voor.jpg zelf (assets/tortoise-texture.jpg), geen procedurele generator meer' });
+  console.groupEnd();
+  console.groupEnd();
+}
+logProvenance();
 
 // bbox of a flat [x,y] point list — used wherever code needs the overall
 // width/height of a measured contour (replaces the old lensWidth/
@@ -503,11 +553,23 @@ function scaledPootje(pootje){
 }
 
 const MATERIALEN = [
+  // 'leisteen': the measured colour of the actual Dodoma product photo
+  // (green-voor.jpg) — median RGB sampled from the frame-material mask,
+  // middle 60% by brightness to exclude specular highlights and dark
+  // speckle (GEMETEN/GEANALYSEERD). Named "leisteen" (slate) because the
+  // real colour reads as a muted blue-grey-green, not the bright green
+  // "green-voor.jpg" might suggest — see assets/green-voor.jpg itself.
+  { id:'leisteen',   label:'Leisteen',   price:10, hex:'#657278' },
   { id:'parelwit',   label:'Parelwit',   price:10, hex:'#F2EEE6' },
   { id:'transparant',label:'Transparant',price:10, hex:'#E4E2D9' },
   { id:'perzik',     label:'Perzik',     price:10, hex:'#F0B18A' },
   { id:'luchtblauw', label:'Luchtblauw', price:10, hex:'#A9CBDF' },
-  { id:'schildpad',  label:'Schildpad',  price:10, hex:'#8B5A34' },
+  // 'schildpad': hex updated to the measured base tone of the actual
+  // Kuala Lumpur product photo (tortoise-voor.jpg, same median-sampling
+  // method as leisteen) — GEMETEN/GEANALYSEERD. The hex only drives the
+  // small picker swatch; the actual 3D material now maps a texture
+  // cropped directly from that same photo (see getTortoiseTexture below).
+  { id:'schildpad',  label:'Schildpad',  price:10, hex:'#594C44' },
   { id:'antraciet',  label:'Antraciet',  price:10, hex:'#3A3A3A' },
   { id:'bosgroen',   label:'Bosgroen',   price:10, hex:'#33503A' },
   { id:'nachtblauw', label:'Nachtblauw', price:10, hex:'#16283D' },
@@ -517,7 +579,10 @@ function getMateriaal(id){ return MATERIALEN.find(m=>m.id===id); }
 let state = {
   montuur: 1,
   pootje: 'A',
-  materiaal: 'nachtblauw',
+  // default to each montuur's own measured photo colour, not an arbitrary
+  // palette pick, so the page's first render is the real product's own
+  // colour — getMontuur(1).defaultMateriaal below ('leisteen' for Dodoma).
+  materiaal: getMontuur(1).defaultMateriaal,
   light: 'studio',
   angle: 'voor',
 };
@@ -792,25 +857,24 @@ const lensMaterial = new THREE.MeshPhysicalMaterial({
   envMapIntensity:1.1, side: THREE.DoubleSide,
 });
 
-// procedural tortoiseshell pattern for the "Schildpad" materiaal — mottled
-// amber/dark blotches on a canvas texture, generated once and reused, so
-// that material reads as a real acetate pattern instead of a flat brown.
+// tortoiseshell pattern for the "Schildpad" materiaal — GEMETEN, not
+// procedural: assets/tortoise-texture.jpg is a crop taken directly from
+// the real Kuala Lumpur product photo (tortoise-voor.jpg), from a patch
+// verified (via the frame-material mask) to be 99.6% pure frame pixels —
+// no background or lens bleeding through — so every blotch/streak in it
+// is the actual product's own pattern, not an invented approximation.
+// MirroredRepeatWrapping (not plain RepeatWrapping) tiles this small crop
+// across the whole rim without a visible seam at the repeat boundary,
+// since a mirrored copy always matches pixel-for-pixel at the edge it
+// shares with the original.
 let tortoiseTexture = null;
 function getTortoiseTexture(){
   if(tortoiseTexture) return tortoiseTexture;
-  const size = 256;
-  const c = document.createElement('canvas'); c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#9a6a3a'; ctx.fillRect(0,0,size,size);
-  for(let i=0;i<220;i++){
-    const x = Math.random()*size, y = Math.random()*size, r = 3+Math.random()*16;
-    ctx.fillStyle = Math.random()<0.55 ? 'rgba(35,20,10,0.55)' : 'rgba(224,175,110,0.4)';
-    ctx.beginPath();
-    ctx.ellipse(x, y, r, r*(0.5+Math.random()*0.4), Math.random()*Math.PI, 0, Math.PI*2);
-    ctx.fill();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  const tex = new THREE.TextureLoader().load('assets/tortoise-texture.jpg', (t) => {
+    t.needsUpdate = true; // material may already be rendering before the async load resolves
+  });
+  tex.wrapS = tex.wrapT = THREE.MirroredRepeatWrapping;
+  tex.repeat.set(3, 3);
   if('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
   tortoiseTexture = tex;
   return tex;
