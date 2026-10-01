@@ -251,6 +251,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js';
 
 /* ======================================================================
    MASTER MEASUREMENT + STANDARD HINGE INTERFACE
@@ -387,7 +388,12 @@ function buildBridgeGeometry(montuur){
 function buildHingeStubGeometry(montuur){
   const lensEdgeX = montuur.bridgeWidth/2 + montuur.lensWidth;
   const len = Math.max(1.5, (HINGE.x + 1.2) - lensEdgeX);
-  const geo = new THREE.BoxGeometry(len, Math.max(2.2, montuur.rimBorder*1.7), montuur.rimDepth*0.85);
+  // z-depth must reach past HINGE.z (where every temple's local origin sits)
+  // with real overlap, not just up to the rim's own front-to-back depth —
+  // otherwise a thin montuur (small rimDepth) can leave a sub-mm gap at the
+  // exact point the temple attaches, however good it looks at other angles.
+  const zDepth = Math.max(montuur.rimDepth*0.85, (HINGE.z + 2.5)*2);
+  const geo = new THREE.BoxGeometry(len, Math.max(2.2, montuur.rimBorder*1.7), zDepth);
   geo.translate(lensEdgeX + len/2, HINGE.y, 0);
   return geo;
 }
@@ -486,11 +492,23 @@ const canvas3d = document.getElementById('previewCanvas3d');
 const renderer = new THREE.WebGLRenderer({ canvas:canvas3d, antialias:true, alpha:true, preserveDrawingBuffer:true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
 if('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
+// filmic tone mapping = the difference between "flat CG preview" and a
+// premium product-shot look — it's what keeps the metal highlights and
+// the acetate clearcoat from blowing out to solid white.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 1, 2000);
 const BASE_DIST = 230;
 camera.position.set(0, 6, BASE_DIST);
+
+// soft, neutral studio reflections (not a visible background — the CSS
+// gradient behind the transparent canvas still provides that) so metal
+// and acetate finishes get real environment highlights instead of flat
+// directional-light dots.
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -502,23 +520,52 @@ controls.maxPolarAngle = Math.PI*0.75;
 controls.target.set(0,0,0);
 controls.update();
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8370, 0.95);
+// lights are deliberately lighter than before now that scene.environment
+// (below) provides realistic ambient/specular fill on its own — stacking
+// full-strength directional lights on top of an env map is what causes the
+// washed-out, overexposed look PBR renders are prone to.
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8370, 0.45);
 scene.add(hemi);
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.65);
 keyLight.position.set(120,180,220);
 scene.add(keyLight);
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.28);
 fillLight.position.set(-150,80,-120);
 scene.add(fillLight);
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
 rimLight.position.set(0,-60,-200);
 scene.add(rimLight);
 
 const sharedMaterial = new THREE.MeshPhysicalMaterial({
   color:0x16283D, roughness:0.4, metalness:0.15, clearcoat:0.3, clearcoatRoughness:0.25,
+  envMapIntensity:1,
   side: THREE.DoubleSide, // the hinge stub is mirrored via negative scale for the left side,
                            // which flips triangle winding — DoubleSide keeps it visible/lit correctly
 });
+
+// soft contact shadow: a transparent disc with a radial-gradient alpha
+// texture sitting just under the glasses — the classic cheap-but-effective
+// stand-in for real ground shadows, grounds the product instead of letting
+// it float against the stage background.
+function buildContactShadowTexture(){
+  const size = 256;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size/2,size/2,0, size/2,size/2,size/2);
+  g.addColorStop(0, 'rgba(0,0,0,0.38)');
+  g.addColorStop(0.7, 'rgba(0,0,0,0.14)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+  const tex = new THREE.CanvasTexture(c);
+  if('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const shadowMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(1,1),
+  new THREE.MeshBasicMaterial({ map:buildContactShadowTexture(), transparent:true, depthWrite:false }),
+);
+shadowMesh.rotation.x = -Math.PI/2;
+scene.add(shadowMesh);
 
 let glassesGroup = null;
 function rebuildGlasses(){
@@ -527,11 +574,19 @@ function rebuildGlasses(){
   const pootje = getPootje(state.pootje);
   const mat = getMateriaal(state.materiaal);
   sharedMaterial.color.set(mat.hex);
-  sharedMaterial.roughness = montuur.finish==='metal' ? 0.3 : 0.55;
-  sharedMaterial.metalness = montuur.finish==='metal' ? 0.55 : 0.04;
-  sharedMaterial.clearcoat = montuur.finish==='metal' ? 0.15 : 0.45;
+  sharedMaterial.roughness = montuur.finish==='metal' ? 0.25 : 0.42;
+  sharedMaterial.metalness = montuur.finish==='metal' ? 0.65 : 0.04;
+  sharedMaterial.clearcoat = montuur.finish==='metal' ? 0.25 : 0.55;
+  sharedMaterial.clearcoatRoughness = montuur.finish==='metal' ? 0.15 : 0.22;
+  sharedMaterial.envMapIntensity = montuur.finish==='metal' ? 1.3 : 0.8;
   glassesGroup = buildGlassesGroup(montuur, pootje, sharedMaterial);
   scene.add(glassesGroup);
+
+  // size/position the shadow disc to the actual frame width so it reads as
+  // one footprint under the glasses rather than a fixed decal
+  const footprintW = HINGE.x*2*0.78;
+  shadowMesh.scale.set(footprintW, footprintW*0.4, 1);
+  shadowMesh.position.set(0, -montuur.lensHeight/2 - 7, -TEMPLE_LENGTH_MM*0.1);
 }
 
 function resizeRenderer(){
