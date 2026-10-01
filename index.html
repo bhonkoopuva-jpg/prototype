@@ -263,37 +263,64 @@ import { RoomEnvironment } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exam
    part against it, never per-combination.
    ====================================================================== */
 const HINGE = Object.freeze({
-  x: 70,   // mm from center-front — half of a realistic ~140mm frame width
+  x: 70,   // mm from center-front — the shared technical interface every
+           // montuur's hinge-stub reaches out to and every pootje starts
+           // from. Deliberately generic, not any one product's measured
+           // frame width: a montuur's real lens/bridge size (see
+           // REAL_WORLD_DIMENSIONS below) is free to differ, and its
+           // hinge-stub simply gets longer or shorter to still land here.
   y: 6,    // mm above the lens's own vertical center (hinges sit high)
   z: 1.5,  // mm back from the rim's front face
 });
-const TEMPLE_LENGTH_MM = 140; // realistic adult temple length (135–145mm brief)
+const TEMPLE_LENGTH_MM = 140; // fallback only, used when a pootje has no
+// REAL_WORLD_DIMENSIONS.templeLength yet — see pootjeScaleFactor() below.
 
 /* ---------- configuration data ----------
-   Every montuur/pootje here is a real parametric 3D shape in millimeters,
-   not a photo — so scale is physically meaningful now and the same model
-   can later drive an AR try-on without being rebuilt. `lensContour` and
-   `curvePoints` below are NOT hand-fit formulas: they are actual traced
-   measurements from assets/*.jpg —
-     - lensContour: the lens-hole's own pixel silhouette, extracted with
-       OpenCV (threshold → enclosed-background connected components →
-       convex hull → polygon simplify), then the left/right lens contours
-       were polar-resampled about their own centroid and averaged
-       (mirroring one onto the other) into one canonical symmetric shape,
-       converted to mm.
-     - curvePoints: the pootje's own centerline, extracted by scanning
-       every column of the side-profile photo for the temple's top/bottom
-       edge and averaging, smoothed, converted to mm using the 140mm
-       temple length as the pixel→mm calibration.
-   What a single 2D photo genuinely cannot give us — and is still a
-   judgment call, not a measurement — is called out per field below:
-   absolute scale (no ruler in the photo; anchored to the brief's
-   realistic adult-glasses range), frame depth and lens curvature (not
-   visible in a flat front photo at all), temple outward flare (not
-   visible in a flat side photo), and the pootje's width-taper profile
-   (the photo's raw width signal is contaminated by perspective
-   foreshortening on the curved back half, so it's simplified to a
-   straight taper rather than taken literally). */
+   Two separate stages feed the final geometry, and they are kept
+   deliberately separate rather than baked into one set of numbers:
+
+     SHAPE (this section): `lensContour` and `curvePoints` are NOT
+     hand-fit formulas, they are actual traced measurements from
+     assets/*.jpg —
+       - lensContour: the lens-hole's own pixel silhouette, extracted with
+         OpenCV (threshold → enclosed-background connected components →
+         convex hull → polygon simplify), then the left/right lens
+         contours were polar-resampled about their own centroid and
+         averaged (mirroring one onto the other) into one canonical
+         symmetric shape.
+       - curvePoints: the pootje's own centerline, extracted by scanning
+         every column of the side-profile photo for the temple's
+         top/bottom edge and averaging, smoothed.
+     These point arrays were converted to a number space using an
+     ASSUMED absolute scale (no ruler was visible in any photo to measure
+     against), so their proportions/curvature are real measurements, but
+     their absolute size is not yet.
+
+     SCALE (REAL_WORLD_DIMENSIONS, per montuur/pootje below): the actual
+     caliper-measured dimensions of the physical product, in mm. This is
+     what corrects the shape data above from "proportionally right" to
+     "actually the right size" — required for AR, where a model 5%
+     off-size shows the customer a different pair of glasses than the one
+     they're buying. Every field starts `null` (unmeasured) rather than a
+     guessed number; see montuurScaleFactors()/pootjeScaleFactor() below
+     for exactly how a missing measurement is handled (it falls back to
+     the shape data's own calibration anchor and logs a console warning,
+     it is never silently invented).
+
+   Pipeline: productfoto → OpenCV pixelmetingen → exacte 2D-vorm
+   (lensContour/curvePoints, this section) → REAL_WORLD_DIMENSIONS →
+   geschaald 3D-model (scaledMontuur/scaledPootje) → modulaire pootjes
+   (shared HINGE) → (future) AR.
+
+   What a single 2D photo genuinely cannot give us at all, however good
+   the real-world scale becomes, is called out per field below: frame
+   depth and lens curvature (not visible in a flat front photo), temple
+   outward flare (not visible in a flat side photo), and the pootje's
+   width-taper profile (the photo's raw width signal is contaminated by
+   perspective foreshortening on the curved back half, so it's simplified
+   to a straight taper rather than taken literally). Those remain
+   informed estimates no matter how good the physical measurements get,
+   and would need an actual 3D scan or a second camera angle to fix. */
 const MONTUREN = [
   // Dodoma = green-voor.jpg. lensContour is the measured, symmetric-
   // averaged lens-hole silhouette (47mm wide at the calibrated scale —
@@ -304,11 +331,21 @@ const MONTUREN = [
   // photo clearly shows) rather than measurements.
   { id:1, label:'Dodoma', price:45, shape:'round', finish:'metal',
     bridgeWidth:20, rimBorder:1.5, rimDepth:2.6,
+    // Real caliper measurements of the physical product (mm). Fill these
+    // in from the actual item, not an estimate — see the header comment
+    // above. Until then every field stays null and the renderer falls
+    // back to this lensContour's own calibration anchor (~47×40.8mm).
+    REAL_WORLD_DIMENSIONS:{ frameWidth:null, frameHeight:null, bridgeWidth:null, lensWidth:null, lensHeight:null },
     lensContour:[[23.241,-0],[22.423,-2.952],[21.635,-5.797],[20.08,-8.317],[18.52,-10.693],[16.984,-13.032],[15.19,-15.19],[12.983,-16.92],[10.771,-18.655],[8.077,-19.499],[5.374,-20.056],[2.685,-20.397],[0,-20.277],[-2.653,-20.151],[-5.315,-19.836],[-8.068,-19.478],[-10.739,-18.601],[-13.249,-17.267],[-15.63,-15.63],[-17.465,-13.402],[-19.259,-11.119],[-21.121,-8.749],[-22.11,-5.924],[-22.9,-3.015],[-23.551,-0],[-23.471,3.09],[-23.389,6.267],[-23.234,9.624],[-22.195,12.814],[-20.474,15.71],[-17.907,17.907],[-14.585,19.008],[-11.478,19.88],[-8.338,20.129],[-5.424,20.242],[-2.679,20.348],[-0,20.452],[2.665,20.243],[5.317,19.843],[8.049,19.431],[10.965,18.991],[13.825,18.017],[16.738,16.738],[19.653,15.08],[21.735,12.549],[23.049,9.547],[23.256,6.231],[23.449,3.087]] },
   // Kuala Lumpur = tortoise-voor.jpg. Same measurement process; lensContour
   // is 42.4mm wide at the calibrated scale.
   { id:3, label:'Kuala Lumpur', price:45, shape:'square', finish:'acetate',
     bridgeWidth:17, rimBorder:4.8, rimDepth:6.2,
+    // Real caliper measurements of the physical product (mm). Fill these
+    // in from the actual item, not an estimate — see the header comment
+    // above. Until then every field stays null and the renderer falls
+    // back to this lensContour's own calibration anchor (~42.4×32.8mm).
+    REAL_WORLD_DIMENSIONS:{ frameWidth:null, frameHeight:null, bridgeWidth:null, lensWidth:null, lensHeight:null },
     lensContour:[[20.441,-0],[19.611,-2.582],[18.73,-5.019],[17.44,-7.224],[16.143,-9.32],[14.502,-11.128],[12.72,-12.72],[10.66,-13.892],[8.602,-14.899],[6.473,-15.628],[4.278,-15.967],[2.146,-16.297],[0,-16.354],[-2.149,-16.32],[-4.359,-16.27],[-6.589,-15.906],[-8.957,-15.515],[-11.403,-14.861],[-13.884,-13.884],[-15.963,-12.249],[-17.927,-10.35],[-19.03,-7.882],[-19.896,-5.331],[-20.385,-2.684],[-20.735,-0],[-21.022,2.768],[-21.225,5.687],[-21.169,8.769],[-20.359,11.754],[-18.557,14.239],[-15.525,15.525],[-12.438,16.209],[-9.401,16.283],[-6.771,16.348],[-4.396,16.406],[-2.167,16.46],[-0,16.307],[2.116,16.075],[4.245,15.842],[6.462,15.599],[8.855,15.337],[11.313,14.743],[13.935,13.935],[16.95,13.006],[19.633,11.335],[21.175,8.771],[21.167,5.672],[20.918,2.754]] },
 ];
 function getMontuur(id){ return MONTUREN.find(m=>m.id===id); }
@@ -322,6 +359,10 @@ const POOTJES = [
   // too noisy past the hinge clip to trust point-by-point).
   { id:'A', label:'Dodoma', price:0, style:'thin',
     thickness:2.0, tipThickness:2.0, width:2.7, flare:1.5,
+    // Real caliper measurement of the physical temple's length (mm).
+    // null = not yet measured; falls back to the curvePoints' own 140mm
+    // calibration anchor — see pootjeScaleFactor() below.
+    REAL_WORLD_DIMENSIONS:{ templeLength:null },
     curvePoints:[[0,-0],[-4.65,-1.84],[-7.05,-2.01],[-11.85,-2.27],[-16.5,-2.56],[-18.9,-2.76],[-23.71,-3.13],[-28.35,-3.52],[-30.76,-3.71],[-35.56,-4.09],[-40.21,-4.47],[-45.01,-4.86],[-47.41,-5.05],[-52.06,-5.4],[-56.86,-5.76],[-59.27,-5.96],[-63.91,-6.33],[-68.72,-6.74],[-71.12,-6.96],[-75.93,-7.4],[-80.57,-7.8],[-82.97,-8],[-87.78,-8.41],[-92.43,-8.78],[-94.83,-9],[-99.63,-9.47],[-104.28,-10.01],[-109.08,-10.23],[-111.49,-10.38],[-116.13,-11.13],[-120.94,-11.81],[-123.34,-12.35],[-127.99,-13.69],[-132.79,-15.99],[-135.19,-17.67],[-140,-18.84]] },
   // Kuala Lumpur = tortoise-pootje.jpg. Note the measured tip drop here
   // (~39mm) is notably larger than Dodoma's (~19mm) — plausible for a
@@ -332,6 +373,10 @@ const POOTJES = [
   // a visual sanity-check on the live model.
   { id:'C', label:'Kuala Lumpur', price:0, style:'bold',
     thickness:4.2, tipThickness:2.0, width:5.6, flare:2.5,
+    // Real caliper measurement of the physical temple's length (mm).
+    // null = not yet measured; falls back to the curvePoints' own 140mm
+    // calibration anchor — see pootjeScaleFactor() below.
+    REAL_WORLD_DIMENSIONS:{ templeLength:null },
     curvePoints:[[0,-0],[-4.72,-1.6],[-7.01,-1.71],[-11.86,-1.93],[-16.57,-2.36],[-18.86,-3.14],[-23.72,-3.28],[-28.43,-3.25],[-30.72,-3.27],[-35.57,-3.36],[-40.29,-3.5],[-45,-3.78],[-47.43,-3.94],[-52.15,-4.32],[-56.86,-4.79],[-59.29,-5.08],[-64,-5.73],[-68.72,-6.46],[-71.15,-6.85],[-75.86,-7.05],[-80.58,-7.43],[-83,-7.69],[-87.72,-8.31],[-92.44,-9.18],[-94.86,-9.75],[-99.58,-11.24],[-104.29,-13.36],[-109.14,-16.62],[-111.43,-18.61],[-116.15,-23.55],[-121,-27.04],[-123.29,-28.56],[-128.01,-31.68],[-132.86,-35.01],[-135.15,-36.92],[-140,-39.48]] },
 ];
 function getPootje(id){ return POOTJES.find(p=>p.id===id); }
@@ -372,6 +417,89 @@ function offsetContour(points, dist){
     out.push([cx+avgx*dist, cy+avgy*dist]);
   }
   return out;
+}
+
+/* ======================================================================
+   SHAPE → SCALE: turn the pixel-measured contours above into true real-
+   world millimeters, using REAL_WORLD_DIMENSIONS. This is the one place
+   the "echte productafmetingen bepalen de schaal" rule is enforced — the
+   measured shape itself (lensContour/curvePoints) is never edited to
+   "look right", only multiplied by a scale factor derived from an actual
+   caliper measurement. Every build function below consumes the output of
+   scaledMontuur()/scaledPootje(), never the raw MONTUREN/POOTJES entries.
+   ====================================================================== */
+// sx/sy are kept separate (not one uniform factor) so that if both a real
+// lensWidth AND a real lensHeight are supplied, a photo that was
+// perspectivically foreshortened more in one axis than the other gets
+// corrected on each axis independently, rather than forcing a single
+// average scale onto a possibly-distorted shape.
+function montuurScaleFactors(montuur){
+  const rwd = montuur.REAL_WORLD_DIMENSIONS || {};
+  const shape = contourBounds(montuur.lensContour); // the lensContour's own baked-in calibration size
+  let sx = 1, sy = 1, measured = false;
+  if(rwd.lensWidth){ sx = rwd.lensWidth / shape.w; measured = true; }
+  if(rwd.lensHeight){ sy = rwd.lensHeight / shape.h; measured = true; }
+  // only one axis measured: the other axis has no independent real data,
+  // so the least-invented assumption is to reuse the measured axis'
+  // factor rather than leaving it at the old calibration guess.
+  if(rwd.lensWidth && !rwd.lensHeight) sy = sx;
+  if(rwd.lensHeight && !rwd.lensWidth) sx = sy;
+
+  // secondary real measurements, if supplied, are NOT used to drive the
+  // scale (lensWidth/lensHeight are the direct match to lensContour's own
+  // calibration) — they're cross-checked against it instead, to surface a
+  // perspective-distorted source photo rather than silently absorb it.
+  const warn = (field, measuredMm, impliedMm) => {
+    if(Math.abs(impliedMm - measuredMm) / measuredMm > 0.05){
+      console.warn(`[${montuur.label}] REAL_WORLD_DIMENSIONS.${field} (${measuredMm}mm) doesn't match the ${impliedMm.toFixed(1)}mm implied by lensWidth/lensHeight scale (>5% off) — possible perspective distortion in the source photo, or one of the two measurements needs rechecking.`);
+    }
+  };
+  if(rwd.bridgeWidth) warn('bridgeWidth', rwd.bridgeWidth, montuur.bridgeWidth*sx);
+  if(rwd.frameWidth){
+    const outerW = contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).w;
+    warn('frameWidth', rwd.frameWidth, montuur.bridgeWidth*sx + 2*outerW*sx);
+  }
+  if(rwd.frameHeight){
+    const outerH = contourBounds(offsetContour(montuur.lensContour, montuur.rimBorder)).h;
+    warn('frameHeight', rwd.frameHeight, outerH*sy);
+  }
+  if(!measured){
+    console.warn(`[${montuur.label}] No REAL_WORLD_DIMENSIONS measured yet — rendering at the photo's own ASSUMED calibration size (${shape.w.toFixed(1)}×${shape.h.toFixed(1)}mm lens), not a verified physical measurement. Fill in REAL_WORLD_DIMENSIONS.lensWidth/lensHeight for an AR-accurate scale.`);
+  }
+  return { sx, sy, measured };
+}
+
+// a copy of montuur with every geometry-relevant field — lensContour,
+// bridgeWidth, rimBorder, rimDepth — scaled to true mm. The contour's
+// proportions and curvature (the actual photo measurement) are untouched;
+// only its absolute size changes.
+function scaledMontuur(montuur){
+  const { sx, sy } = montuurScaleFactors(montuur);
+  const sAvg = (sx+sy)/2; // rimBorder/rimDepth have no independent real
+  // measurement of their own (not in the REAL_WORLD_DIMENSIONS field
+  // list), so they scale with the average of whatever axes were measured
+  // rather than drifting out of proportion with the lens they sit on.
+  return {
+    ...montuur,
+    lensContour: montuur.lensContour.map(([x,y]) => [x*sx, y*sy]),
+    bridgeWidth: montuur.bridgeWidth * sx,
+    rimBorder: montuur.rimBorder * sAvg,
+    rimDepth: montuur.rimDepth * sAvg,
+  };
+}
+
+// a single length measurement (no second axis available for a temple, so
+// this stays a uniform scale along the curve — flagged in the header
+// comment as the honest limit of what a side-profile photo can give us).
+function pootjeScaleFactor(pootje){
+  const rwd = pootje.REAL_WORLD_DIMENSIONS || {};
+  if(rwd.templeLength) return rwd.templeLength / TEMPLE_LENGTH_MM;
+  console.warn(`[${pootje.label}] No REAL_WORLD_DIMENSIONS.templeLength measured yet — rendering at the curvePoints' own ASSUMED calibration length (${TEMPLE_LENGTH_MM}mm), not a verified physical measurement.`);
+  return 1;
+}
+function scaledPootje(pootje){
+  const s = pootjeScaleFactor(pootje);
+  return { ...pootje, curvePoints: pootje.curvePoints.map(([z,y]) => [z*s, y*s]) };
 }
 
 const MATERIALEN = [
@@ -541,8 +669,12 @@ function buildTaperedTubeGeometry(curve, segments, radialSegments, radiusFn){
 // part of this curve a side-profile photo can't show at all (outward X
 // splay only shows in a front/top view), so it stays a straight ramp.
 function buildTempleGeometry(pootje, side){
+  // normalize against this pootje's OWN curve length, not the fallback
+  // constant — once a real templeLength measurement scales curvePoints
+  // (see scaledPootje above), the flare ramp must track the new length.
+  const templeLen = Math.abs(pootje.curvePoints[pootje.curvePoints.length-1][0]) || TEMPLE_LENGTH_MM;
   const pts = pootje.curvePoints.map(([z,y]) => {
-    const f = Math.abs(z) / TEMPLE_LENGTH_MM;
+    const f = Math.abs(z) / templeLen;
     return new THREE.Vector3(side * f * pootje.flare, y, z);
   });
   const curve = new THREE.CatmullRomCurve3(pts);
@@ -709,8 +841,13 @@ scene.add(shadowMesh);
 let glassesGroup = null;
 function rebuildGlasses(){
   if(glassesGroup){ scene.remove(glassesGroup); disposeGroup(glassesGroup); }
-  const montuur = getMontuur(state.montuur);
-  const pootje = getPootje(state.pootje);
+  const montuurRaw = getMontuur(state.montuur);
+  const pootjeRaw = getPootje(state.pootje);
+  // all geometry is built from the SCALED copies (real-world mm, see
+  // scaledMontuur/scaledPootje above) — montuurRaw/pootjeRaw are kept
+  // around only for non-geometry metadata (finish, label).
+  const montuur = scaledMontuur(montuurRaw);
+  const pootje = scaledPootje(pootjeRaw);
   const mat = getMateriaal(state.materiaal);
   const isTortoise = mat.id === 'schildpad';
   const isTransparent = mat.id === 'transparant';
