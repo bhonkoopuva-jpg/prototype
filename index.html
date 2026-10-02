@@ -598,29 +598,32 @@ let state = {
   angle: 'voor',
 };
 
-/* ---------- simple vector glasses (unchanged) — used only for the live
-   webcam try-on overlay below, which draws on a flat 2D video frame and
-   has nothing to do with the 3D studio preview. ---------- */
-function drawGlassesFront(ctx, cx, cy, unitScale, color){
-  ctx.save(); ctx.translate(cx, cy); ctx.scale(unitScale, unitScale);
-  const lensW=58, lensH=40, rimW=9, gap=20, r=8;
-  ctx.lineJoin='round'; ctx.fillStyle=color; ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=1;
-  function rr(x,y,w,h,rad){
-    ctx.beginPath(); ctx.moveTo(x+rad,y); ctx.arcTo(x+w,y,x+w,y+h,rad); ctx.arcTo(x+w,y+h,x,y+h,rad);
-    ctx.arcTo(x,y+h,x,y,rad); ctx.arcTo(x,y,x+w,y,rad); ctx.closePath();
+/* ======================================================================
+   SELECTED CONFIGURATION — the single source of truth for "which bril".
+   `state` holds only the user's picks (ids); this resolves them into one
+   frozen object. The configurator's 3D model AND the AR try-on are both
+   built from this — AR never decides on its own which bril to load, and
+   there is no separate/default/placeholder AR bril anywhere.
+   ====================================================================== */
+function getSelectedConfiguration(){
+  const frame = getMontuur(state.montuur);
+  const temple = getPootje(state.pootje);
+  const material = getMateriaal(state.materiaal);
+  if(!frame || !temple || !material){
+    throw new Error(`Ongeldige configuratie: montuur=${state.montuur} pootje=${state.pootje} materiaal=${state.materiaal}`);
   }
-  [-1,1].forEach(side=>{
-    const x = side===-1 ? -(gap/2+lensW) : gap/2, y = -lensH/2;
-    rr(x-rimW/2, y-rimW/2, lensW+rimW, lensH+rimW, r+rimW/2); ctx.fill(); ctx.stroke();
-    ctx.save(); rr(x,y,lensW,lensH,r); ctx.clip();
-    ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(x,y,lensW,lensH); ctx.restore();
-    const armX = side===-1 ? x-rimW/2 : x+lensW+rimW/2;
-    ctx.beginPath(); ctx.moveTo(armX,0); ctx.lineTo(armX+side*26,-4);
-    ctx.lineWidth=rimW*0.7; ctx.strokeStyle=color; ctx.lineCap='round'; ctx.stroke();
+  return Object.freeze({
+    key: `${frame.id}-${temple.id}-${material.id}`,
+    frameId: frame.id, frame: frame.label,
+    templeId: temple.id, temple: temple.label,
+    materialId: material.id, material: material.label, color: material.hex,
   });
-  ctx.fillStyle=color; rr(-gap/2, -lensH/2+6, gap, 9, 4); ctx.fill();
-  ctx.restore();
 }
+
+// The one 3D product model that exists at any time: the configurator
+// builds it (rebuildGlasses), AR only ever clones it (sharing the very same
+// geometry buffers + material instances, see syncARModel).
+let productModel = null; // { configuration, group }
 
 /* ======================================================================
    PARAMETRIC 3D GEOMETRY — frame + temples, built in real millimeters
@@ -979,14 +982,15 @@ scene.add(shadowMesh);
 let glassesGroup = null;
 function rebuildGlasses(){
   if(glassesGroup){ scene.remove(glassesGroup); disposeGroup(glassesGroup); }
-  const montuurRaw = getMontuur(state.montuur);
-  const pootjeRaw = getPootje(state.pootje);
+  const configuration = getSelectedConfiguration();
+  const montuurRaw = getMontuur(configuration.frameId);
+  const pootjeRaw = getPootje(configuration.templeId);
   // all geometry is built from the SCALED copies (real-world mm, see
   // scaledMontuur/scaledPootje above) — montuurRaw/pootjeRaw are kept
   // around only for non-geometry metadata (finish, label).
   const montuur = scaledMontuur(montuurRaw);
   const pootje = scaledPootje(pootjeRaw);
-  const mat = getMateriaal(state.materiaal);
+  const mat = getMateriaal(configuration.materialId);
   const isTortoise = mat.id === 'schildpad';
   const isTransparent = mat.id === 'transparant';
 
@@ -1006,6 +1010,7 @@ function rebuildGlasses(){
   sharedMaterial.needsUpdate = true;
   glassesGroup = buildGlassesGroup(montuur, pootje, sharedMaterial, lensMaterial);
   scene.add(glassesGroup);
+  productModel = { configuration, group: glassesGroup };
 
   // size/position the shadow disc to the actual frame width so it reads as
   // one footprint under the glasses rather than a fixed decal
@@ -1089,7 +1094,9 @@ function refresh(){
     `linear-gradient(180deg, ${bg}, color-mix(in srgb, ${bg} 70%, var(--olive)))`;
 
   renderOptions();
-  syncLiveColor();
+  // AR always mirrors the configurator's current product model — if the
+  // try-on is open while the configuration changes, it follows immediately.
+  if(!tryonModal.hidden) syncARModel();
 }
 
 /* ---------- small inline icons for the option chips (schematic, not
@@ -1171,6 +1178,7 @@ document.getElementById('finishBtn').addEventListener('click', ()=>{
 const tryonModal = document.getElementById('tryonModal');
 function openTryOn(){
   tryonModal.hidden = false;
+  syncARModel();
   if(!running) document.getElementById('startBtn').click();
 }
 function closeTryOn(){
@@ -1185,10 +1193,18 @@ document.getElementById('tryOnBtn').addEventListener('click', openTryOn);
 document.getElementById('closeTryOn').addEventListener('click', closeTryOn);
 tryonModal.addEventListener('click', (e)=>{ if(e.target===tryonModal) closeTryOn(); });
 
-/* ---------- live camera AR (uses configurator's material color) ---------- */
+/* ======================================================================
+   LIVE CAMERA AR — renders the configurator's own 3D product model.
+   No 2D sprite, no default/placeholder bril, no simplified AR asset:
+   syncARModel() clones productModel.group, and Object3D.clone() keeps the
+   exact same BufferGeometry + Material instances (same mm vertex data,
+   same montuur + pootjes + materiaal). The model is never rescaled:
+   1 unit = 1 mm stays true. Instead the *camera* is fitted to the face —
+   pixels-per-mm is measured from the iris (≈11.7 mm, a stable human
+   constant), so a 140 mm bril stays 140 mm against the user's real face.
+   ====================================================================== */
 const video = document.getElementById('video');
 const liveCanvas = document.getElementById('liveCanvas');
-const lctx = liveCanvas.getContext('2d');
 const startMsg = document.getElementById('startMsg');
 const startBtn = document.getElementById('startBtn');
 const snapBtn = document.getElementById('snapBtn');
@@ -1197,13 +1213,119 @@ const switchCamBtn = document.getElementById('switchCamBtn');
 
 let currentStream = null, facingMode = 'user', faceMesh = null, running = false, lastLandmarks = null, busy = false;
 
-function syncLiveColor(){ /* color read live from state.materiaal at draw time, nothing to precompute */ }
+const IRIS_DIAMETER_MM = 11.7;      // horizontal visible iris diameter, adult average
+const OUTER_CANTHI_MM = 90;         // fallback only, if iris landmarks are missing
+const LENS_PLANE_OFFSET_MM = 12;    // vertex distance: lens plane in front of the cornea
+
+const arRenderer = new THREE.WebGLRenderer({ canvas:liveCanvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
+arRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+if('outputColorSpace' in arRenderer) arRenderer.outputColorSpace = THREE.SRGBColorSpace;
+arRenderer.toneMapping = renderer.toneMapping;
+arRenderer.toneMappingExposure = renderer.toneMappingExposure;
+
+const arScene = new THREE.Scene();
+arScene.environment = scene.environment; // same studio reflections as the configurator
+arScene.add(hemi.clone(), keyLight.clone(), fillLight.clone(), rimLight.clone());
+
+// the camera image is the scene background (cover-cropped + mirrored via
+// texture repeat/offset in fitVideoBackground), so the clear lens glass
+// refracts the real video instead of an empty transparent canvas
+const videoTexture = new THREE.VideoTexture(video);
+if('colorSpace' in videoTexture) videoTexture.colorSpace = THREE.SRGBColorSpace;
+videoTexture.wrapS = THREE.RepeatWrapping;
+arScene.background = videoTexture;
+
+// orthographic camera measured in mm (its frustum is set per frame from
+// the face's pixels-per-mm) — perspective plays no part in the bril's size
+const arCamera = new THREE.OrthographicCamera(-100, 100, 75, -75, 1, 5000);
+arCamera.position.set(0, 0, 2000);
+arCamera.lookAt(0, 0, 0);
+
+// head pose anchor: rotation + position only. Its scale is never touched.
+const arAnchor = new THREE.Group();
+arAnchor.visible = false;
+arScene.add(arAnchor);
+
+// invisible head (depth only) so pootjes disappear behind the head/ears
+// instead of being drawn over the face. This is an occluder, not part of
+// the bril — the product model itself is untouched.
+const headOccluderGeo = new THREE.SphereGeometry(1, 48, 32);
+headOccluderGeo.scale(80, 105, 95); // ≈ adult head half-widths in mm; wide enough that pootjes (HINGE.x + flare ≈ 72 mm) run inside it behind the ears
+const headOccluder = new THREE.Mesh(headOccluderGeo, new THREE.MeshBasicMaterial({ colorWrite:false }));
+headOccluder.position.set(0, 12, -LENS_PLANE_OFFSET_MM - 95);
+headOccluder.renderOrder = -1;
+arAnchor.add(headOccluder);
+
+let arModel = null;
+
+function modelSizeMm(object){
+  // measured in the object's own (unposed) space, so anchor rotation doesn't skew it
+  const box = new THREE.Box3();
+  object.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(object.matrixWorld).invert();
+  object.traverse(o=>{
+    if(!o.isMesh) return;
+    o.geometry.computeBoundingBox();
+    const b = o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    box.union(b);
+  });
+  const s = box.getSize(new THREE.Vector3());
+  return { width:+s.x.toFixed(2), height:+s.y.toFixed(2), depth:+s.z.toFixed(2) };
+}
+
+function meshesOf(object){ const out=[]; object.traverse(o=>{ if(o.isMesh) out.push(o); }); return out; }
+
+// true when the AR model is literally the configurator's model: same
+// configuration, same geometry instances, same materials, same local transforms, scale 1
+function verifyARMatchesConfigurator(){
+  if(!productModel || !arModel) return false;
+  const a = meshesOf(productModel.group), b = meshesOf(arModel);
+  if(a.length !== b.length) return false;
+  const same = a.every((m,i)=> m.geometry === b[i].geometry && m.material === b[i].material
+    && m.position.equals(b[i].position) && m.quaternion.equals(b[i].quaternion) && m.scale.equals(b[i].scale));
+  const unscaled = arModel.scale.x===1 && arModel.scale.y===1 && arModel.scale.z===1
+    && arAnchor.scale.x===1 && arAnchor.scale.y===1 && arAnchor.scale.z===1;
+  return same && unscaled && arModel.userData.configurationKey === productModel.configuration.key;
+}
+
+function syncARModel(){
+  if(!productModel) rebuildGlasses();
+  if(arModel) arAnchor.remove(arModel);
+  arModel = productModel.group.clone(); // shares geometry + material — no second bril
+  arModel.userData.configurationKey = productModel.configuration.key;
+  arAnchor.add(arModel);
+
+  const c = productModel.configuration;
+  const size = modelSizeMm(arModel);
+  console.log('AR configuration:',
+    '\n  frame:', `${c.frame} (id ${c.frameId})`,
+    '\n  temple:', `${c.temple} (id ${c.templeId})`,
+    '\n  material:', `${c.material} (${c.materialId}, ${c.color})`,
+    '\n  model:', `configurator mesh group ${productModel.group.uuid} — ${meshesOf(arModel).length} meshes, ${size.width}×${size.height}×${size.depth} mm`,
+    '\n  same geometry as configurator:', verifyARMatchesConfigurator());
+}
 
 function resizeLiveCanvas(){
-  const rect = video.getBoundingClientRect();
-  liveCanvas.width = rect.width; liveCanvas.height = rect.height;
+  const rect = liveCanvas.getBoundingClientRect();
+  arRenderer.setSize(Math.max(1, Math.round(rect.width)), Math.max(1, Math.round(rect.height)), false);
 }
 window.addEventListener('resize', resizeLiveCanvas);
+
+// object-fit:cover crop of the video into the canvas, expressed as the
+// visible fraction (rx, ry) of the video frame — shared by the background
+// texture and the landmark mapping so they line up exactly
+function videoCover(){
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  const cw = arRenderer.domElement.clientWidth || 640, ch = arRenderer.domElement.clientHeight || 480;
+  const va = vw/vh, ca = cw/ch;
+  return va > ca ? { rx: ca/va, ry: 1, cw, ch } : { rx: 1, ry: va/ca, cw, ch };
+}
+function fitVideoBackground(){
+  const { rx, ry } = videoCover();
+  const mirrored = facingMode === 'user';
+  videoTexture.repeat.set(mirrored ? -rx : rx, ry);
+  videoTexture.offset.set(mirrored ? (1+rx)/2 : (1-rx)/2, (1-ry)/2);
+}
 
 async function startCamera(){
   try{
@@ -1240,41 +1362,87 @@ async function loop(){
     try{ await faceMesh.send({ image: video }); } catch(e){}
     busy = false;
   }
-  drawLive();
+  renderAR();
   requestAnimationFrame(loop);
 }
 
-function drawLive(){
-  const w = liveCanvas.width, h = liveCanvas.height;
-  lctx.clearRect(0,0,w,h);
-  if(!lastLandmarks) return;
-  const toXY = (idx)=>{ const p = lastLandmarks[idx]; return { x: p.x*w, y: p.y*h }; };
-  const leftOuter = toXY(33), rightOuter = toXY(263);
+let smoothedPxPerMm = null;
+
+// landmarks → head pose. Only rotation + position are applied to arAnchor;
+// the face's size is handled by fitting the camera frustum (px per mm).
+function updateHeadPose(landmarks){
+  const { rx, ry, cw, ch } = videoCover();
   const mirrored = facingMode === 'user';
-  const mx = (x)=> mirrored ? (w-x) : x;
-  const p1 = { x: mx(leftOuter.x), y: leftOuter.y };
-  const p2 = { x: mx(rightOuter.x), y: rightOuter.y };
-  const dx = p2.x-p1.x, dy = p2.y-p1.y;
-  const eyeDist = Math.hypot(dx,dy);
-  const angle = Math.atan2(dy,dx);
-  const cx = (p1.x+p2.x)/2, cy = (p1.y+p2.y)/2 + eyeDist*0.03;
-  lctx.save(); lctx.translate(cx,cy); lctx.rotate(angle); lctx.translate(-cx,-cy);
-  drawGlassesFront(lctx, cx, cy, eyeDist/100, getMateriaal(state.materiaal).hex);
-  lctx.restore();
+  // normalized video coords → canvas pixels, Y up, Z toward the camera
+  const P = (i)=>{
+    const p = landmarks[i];
+    let u = (p.x - (1-rx)/2) / rx;
+    const v = (p.y - (1-ry)/2) / ry;
+    if(mirrored) u = 1 - u;
+    return new THREE.Vector3((u-0.5)*cw, (0.5-v)*ch, -p.z*cw/rx);
+  };
+
+  let pxPerMm;
+  if(landmarks.length >= 478){
+    const irisPx = (P(469).distanceTo(P(471)) + P(474).distanceTo(P(476))) / 2;
+    pxPerMm = irisPx / IRIS_DIAMETER_MM;
+  } else {
+    pxPerMm = P(33).distanceTo(P(263)) / OUTER_CANTHI_MM;
+  }
+  smoothedPxPerMm = smoothedPxPerMm ? smoothedPxPerMm*0.85 + pxPerMm*0.15 : pxPerMm;
+  const k = smoothedPxPerMm;
+
+  // camera frustum in mm: this — not a model scale — maps real mm to pixels
+  arCamera.left = -cw/2/k; arCamera.right = cw/2/k;
+  arCamera.top = ch/2/k;   arCamera.bottom = -ch/2/k;
+  arCamera.updateProjectionMatrix();
+
+  const mm = (v)=> v.divideScalar(k);
+  // model +X must point to the screen-right eye: landmark 263 in the raw
+  // image, landmark 33 once the selfie view is mirrored
+  const xAxis = mirrored ? mm(P(33)).sub(mm(P(263))) : mm(P(263)).sub(mm(P(33)));
+  xAxis.normalize();
+  const upApprox = mm(P(10)).sub(mm(P(152)));
+  const zAxis = new THREE.Vector3().crossVectors(xAxis, upApprox).normalize();
+  const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+  arAnchor.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
+
+  const pupils = landmarks.length >= 478
+    ? mm(P(468)).add(mm(P(473))).multiplyScalar(0.5)
+    : mm(P(33)).add(mm(P(263))).multiplyScalar(0.5);
+  arAnchor.position.copy(pupils).addScaledVector(zAxis, LENS_PLANE_OFFSET_MM);
+  arAnchor.visible = true;
+}
+
+function renderAR(){
+  const rect = liveCanvas.getBoundingClientRect();
+  if(arRenderer.domElement.width !== Math.round(rect.width*arRenderer.getPixelRatio())) resizeLiveCanvas();
+  fitVideoBackground();
+  if(lastLandmarks) updateHeadPose(lastLandmarks); else arAnchor.visible = false;
+  arRenderer.render(arScene, arCamera);
 }
 
 snapBtn.addEventListener('click', ()=>{
-  const out = document.createElement('canvas');
-  out.width = liveCanvas.width; out.height = liveCanvas.height;
-  const octx = out.getContext('2d');
-  octx.save();
-  if(facingMode==='user'){ octx.translate(out.width,0); octx.scale(-1,1); }
-  octx.drawImage(video, 0, 0, out.width, out.height);
-  octx.restore();
-  octx.drawImage(liveCanvas, 0, 0);
-  snapLink.href = out.toDataURL('image/png');
+  // the AR canvas already contains the (mirrored) camera image + the bril
+  snapLink.href = liveCanvas.toDataURL('image/png');
   snapLink.click();
 });
+
+// debug/test hook: lets the console (or an automated test) inspect exactly
+// what the configurator and AR are using
+window.__everywear = {
+  getSelectedConfiguration, syncARModel, verifyARMatchesConfigurator, modelSizeMm,
+  get productModel(){ return productModel; },
+  get arModel(){ return arModel; },
+  select(frameId, templeId, materialId){
+    if(frameId!==undefined) state.montuur = frameId;
+    if(templeId!==undefined) state.pootje = templeId;
+    if(materialId!==undefined) state.materiaal = materialId;
+    refresh();
+  },
+  openTryOn, closeTryOn, renderAR,
+  setLandmarks(l){ lastLandmarks = l; },
+};
 
 refresh();
 </script>
