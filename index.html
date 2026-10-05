@@ -423,7 +423,7 @@ function getMontuurProvenance(montuur){
     'Scharnierhoogte':               MV('AFGELEID — zijaanzicht teruggeprojecteerd + multi-view silhouetfit'),
     'Scharnierdiepte':               'AANSLUITEND — pootje begint 0,5 mm in de achterkant van het scharnierstuk (naadloze, modulaire koppeling)',
     'Aansluitstuk pootje':           montuur.nativePootje ? 'GEMETEN — de eerste 18 mm van elk gekozen pootje volgt hoogte, dikte, richting en zijwaartse stand van het originele pootje van dit montuur, daarna vloeiende overgang' : 'n.v.t.',
-    'Randafronding (bevel)':         'AANGENOMEN — kleiner dan de beeldresolutie',
+    'Randafronding (bevel)':         'AANGENOMEN — acetaat ~1 mm (gepolijst), metaal 0,3 mm; kleiner dan wat de video betrouwbaar toont',
     'Neuspads':                      montuur.nosePads ? 'aanhechting GEMETEN (vooraanzicht); padvorm, -hoek en -diepte AANGENOMEN' : 'n.v.t. / niet zichtbaar in de video',
     'Lensopening':                   'GEMETEN — convexe omhullende van de gemeten opening (verwijdert pixelruis en de neuspad-arm), glad gemaakt σ 0,25 mm',
     'Kleur':                         'GEMETEN — mediaan van montuurpixels (highlights/schaduw uitgesloten)',
@@ -672,7 +672,9 @@ function applyWrap(geo, montuur){
 function buildFrontGeometry(montuur){
   const t = montuur.frontThickness;
   const metal = montuur.finish === 'metal';
-  const bevelSize = metal ? 0.3 : 0.55, bevelThickness = Math.min(t*0.3, metal ? 0.35 : 0.7);
+  // polished acetate has well-rounded edges (~1 mm); that rounding is what
+  // catches the light as crisp highlight lines. Thin metal stays tight.
+  const bevelSize = metal ? 0.3 : 1.0, bevelThickness = Math.min(t*0.38, metal ? 0.35 : 1.15);
   const outers = montuur.plateOuter.map(ccw);
   const shapes = outers.map(o => shapeFromContour(o));
   // every hole goes into the outline that contains it (the largest one)
@@ -680,7 +682,7 @@ function buildFrontGeometry(montuur){
   montuur.plateHoles.forEach(h => main.holes.push(pathFromContour(cw(h))));
   const depth = Math.max(0.2, t - 2*bevelThickness);
   let geo = new THREE.ExtrudeGeometry(shapes, {
-    depth, bevelEnabled:true, bevelThickness, bevelSize, bevelOffset:-bevelSize, bevelSegments:3, curveSegments:1,
+    depth, bevelEnabled:true, bevelThickness, bevelSize, bevelOffset:-bevelSize, bevelSegments:metal ? 3 : 5, curveSegments:1,
   });
   geo.translate(0, 0, -(depth + bevelThickness));
   geo = subdivideNonIndexed(geo, 3);
@@ -862,7 +864,30 @@ camera.position.set(0, 6, BASE_DIST);
 // and acetate finishes get real environment highlights instead of flat
 // directional-light dots.
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+// studio environment for reflections: the neutral room plus three large
+// softboxes (key above-front, two strip lights at the sides) — the crisp
+// light streaks you see on real glasses in product photography
+function buildStudioEnvironment(){
+  // dark neutral studio (soft grey falloff, lighter floor bounce) with three
+  // large softboxes: key above-front, strip lights left and right
+  const env = new THREE.Scene();
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(20, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true }));
+  const pos = dome.geometry.attributes.position, cols = [];
+  for(let i=0;i<pos.count;i++){ const y = pos.getY(i)/20; const g = y > 0 ? 0.035 + 0.04*(1-y) : 0.10 + 0.04*y; /* dark studio: light comes from the softboxes */ cols.push(g, g, g*0.98); }
+  dome.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  env.add(dome);
+  const box = (w, h, intensity, pos, look) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(1,1,1).multiplyScalar(intensity), side: THREE.DoubleSide }));
+    m.position.set(...pos); m.lookAt(...look); env.add(m);
+  };
+  box(4.5, 3, 28, [-6, 7, 6], [0, 0, 0]);         // key softbox upper-left-front: gives the frame form + a travelling highlight
+  box(0.6, 7, 14, [9, 2, 2], [0, 0, 0]);          // right strip light: crisp edge streak
+  box(0.6, 7, 7, [-9, 1, -1], [0, 0, 0]);         // left rim strip
+  box(8, 1.4, 2.2, [0, 3, 12], [0, 0, 0]);        // weak front fill behind the camera
+  box(5, 1.2, 4, [0, 1, -10], [0, 0, 0]);         // back light (rim on the pootjes)
+  return env;
+}
+scene.environment = pmrem.fromScene(buildStudioEnvironment(), 0.02).texture;
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -878,12 +903,12 @@ controls.update();
 // (below) provides realistic ambient/specular fill on its own — stacking
 // full-strength directional lights on top of an env map is what causes the
 // washed-out, overexposed look PBR renders are prone to.
-const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8370, 0.45);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8370, 0.18);
 scene.add(hemi);
-const keyLight = new THREE.DirectionalLight(0xffffff, 0.65);
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.35);
 keyLight.position.set(120,180,220);
 scene.add(keyLight);
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.28);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.12);
 fillLight.position.set(-150,80,-120);
 scene.add(fillLight);
 const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
@@ -995,14 +1020,29 @@ function rebuildGlasses(){
   // materiaal is a flat measured colour with no map.
   sharedMaterial.map = hasTexture ? getTexture(mat.texture, mat.textureMm) : null;
   sharedMaterial.color.set(hasTexture ? 0xffffff : mat.hex);
-  sharedMaterial.transmission = isTransparent ? 0.85 : 0;
+  // ---- finish presets: make the chosen colour read as a real material
+  // rather than a flat tint. Acetate = polished cellulose acetate: glossy
+  // clear top layer with sharp studio reflections, and light colours glow
+  // slightly from within (acetate scatters light — pastels never go dead
+  // grey in the shadows). Metal = colour-coated metal: the colour is in the
+  // coating, with a metallic base underneath. Transparent = clear acetate.
+  const c = new THREE.Color(hasTexture ? 0xffffff : mat.hex);
+  const lum = 0.2126*c.r + 0.7152*c.g + 0.0722*c.b;             // linear luminance of the chosen colour
+  const metal = montuur.finish === 'metal';
+  sharedMaterial.transmission = 0;
+  sharedMaterial.thickness = 0;
   sharedMaterial.transparent = isTransparent;
-  sharedMaterial.thickness = isTransparent ? 1.5 : 0;
-  sharedMaterial.roughness = montuur.finish==='metal' ? 0.25 : (isTransparent ? 0.12 : 0.42);
-  sharedMaterial.metalness = montuur.finish==='metal' ? 0.65 : 0.04;
-  sharedMaterial.clearcoat = montuur.finish==='metal' ? 0.25 : 0.55;
-  sharedMaterial.clearcoatRoughness = montuur.finish==='metal' ? 0.15 : 0.22;
-  sharedMaterial.envMapIntensity = montuur.finish==='metal' ? 1.3 : 0.8;
+  sharedMaterial.opacity = isTransparent ? 0.38 : 1;
+  sharedMaterial.depthWrite = !isTransparent;
+  sharedMaterial.metalness = metal ? 0.55 : 0;
+  sharedMaterial.roughness = metal ? 0.26 : (isTransparent ? 0.06 : 0.12);
+  sharedMaterial.clearcoat = metal ? 0.6 : 1;
+  sharedMaterial.clearcoatRoughness = metal ? 0.08 : 0.025;
+  sharedMaterial.specularIntensity = 1;
+  sharedMaterial.ior = 1.49;                                     // cellulose acetate
+  sharedMaterial.envMapIntensity = metal ? 1.35 : 1.25;
+  // subsurface-like inner glow for light acetate colours (none for dark/metal)
+  sharedMaterial.emissive.copy(c).multiplyScalar(metal || isTransparent ? 0 : 0.12 * Math.min(1, lum*2.2));
   sharedMaterial.needsUpdate = true;
   glassesGroup = buildGlassesGroup(montuur, pootje, sharedMaterial, lensMaterial);
   scene.add(glassesGroup);
