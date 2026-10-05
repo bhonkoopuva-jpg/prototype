@@ -1029,8 +1029,22 @@ function rebuildGlasses(){
   const c = new THREE.Color(hasTexture ? 0xffffff : mat.hex);
   const lum = 0.2126*c.r + 0.7152*c.g + 0.0722*c.b;             // linear luminance of the chosen colour
   const metal = montuur.finish === 'metal';
-  sharedMaterial.transmission = 0;
-  sharedMaterial.thickness = 0;
+  // Coloured acetate is slightly translucent: a small share of the light
+  // passes through the material and picks up its colour (attenuation), so
+  // edges and thin parts glow a little like real acetate. Kept deliberately
+  // low so the perceived colour stays the chosen colour; darker colours
+  // transmit less (as real dark acetate does). Metal and the clear
+  // "transparant" option keep their own treatment.
+  const acetateTint = !metal && !isTransparent && !hasTexture;
+  sharedMaterial.transmission = acetateTint ? 0.06 + 0.10 * Math.min(1, lum*2) : 0;
+  sharedMaterial.thickness = acetateTint ? montuur.frontThickness : 0;
+  if(acetateTint){
+    sharedMaterial.attenuationColor.copy(c);
+    sharedMaterial.attenuationDistance = montuur.frontThickness * 0.6;
+  } else {
+    sharedMaterial.attenuationColor.set(0xffffff);
+    sharedMaterial.attenuationDistance = Infinity;
+  }
   sharedMaterial.transparent = isTransparent;
   sharedMaterial.opacity = isTransparent ? 0.38 : 1;
   sharedMaterial.depthWrite = !isTransparent;
@@ -1042,7 +1056,7 @@ function rebuildGlasses(){
   sharedMaterial.ior = 1.49;                                     // cellulose acetate
   sharedMaterial.envMapIntensity = metal ? 1.35 : 1.25;
   // subsurface-like inner glow for light acetate colours (none for dark/metal)
-  sharedMaterial.emissive.copy(c).multiplyScalar(metal || isTransparent ? 0 : 0.12 * Math.min(1, lum*2.2));
+  sharedMaterial.emissive.copy(c).multiplyScalar(metal || isTransparent ? 0 : 0.08 * Math.min(1, lum*2.2));
   sharedMaterial.needsUpdate = true;
   glassesGroup = buildGlassesGroup(montuur, pootje, sharedMaterial, lensMaterial);
   scene.add(glassesGroup);
