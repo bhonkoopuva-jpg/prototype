@@ -708,18 +708,11 @@ function lateralWidth(h, finish){
   return finish === 'metal' ? THREE.MathUtils.clamp(0.45*h, 1.0, 2.0) : THREE.MathUtils.clamp(0.55*h, 1.6, 3.8);
 }
 function segmentAt(pootje, f){ return pootje.segments.find(s => f >= s.from && f <= s.to) || null; }
-// ---- montuur "socket": the first few millimetres of every pootje follow the
-// measured root of the montuur's OWN original pootje (height, lateral
-// thickness, direction, outward path), then blends smoothly into the chosen
-// pootje's own measured shape. Native combination = unchanged. This makes a
-// chunky pootje on a thin metal front start like that front's own slim
-// pootje, and a slim pootje on a thick acetate front start with that front's
-// sturdy root — the way the real frames attach.
-const SOCKET_MM = 6;        // short straight taper: original pootje's root size at the hinge → chosen pootje at 6 mm
-function curveAt(pootje, s){            // centre line (z,y) at arc length s (mm); curvePoints are arc-uniform
-  const P = pootje.curvePoints, n = P.length, L = pootje.calibratedLengthScaled;
-  const x = Math.min(1, Math.max(0, s/L))*(n-1), i = Math.min(n-2, Math.floor(x)), t = x-i;
-  return [THREE.MathUtils.lerp(P[i][0],P[i+1][0],t), THREE.MathUtils.lerp(P[i][1],P[i+1][1],t)];
+// pootje profile helpers (arc length s in mm along the pootje's own centre line)
+function arcLengthOf(pootje){
+  let L = 0; const P = pootje.curvePoints;
+  for(let i=1;i<P.length;i++) L += Math.hypot(P[i][0]-P[i-1][0], P[i][1]-P[i-1][1]);
+  return L;
 }
 function heightAt(pootje, s){
   const H = pootje.heightProfile, n = H.length, x = Math.min(1, Math.max(0, s/pootje.calibratedLengthScaled))*(n-1), i = Math.min(n-2, Math.floor(x));
@@ -731,29 +724,10 @@ function widthAt(pootje, s){
   return lateralWidth(heightAt(pootje, s), finishAt(pootje, f)) * (pootje.widthScale || 1);
 }
 function lateralAt(pootje, s){ const f = Math.min(1, s/pootje.calibratedLengthScaled); return pootje.flare*f + (pootje.flare2||0)*f*f; }
-function arcLengthOf(pootje){
-  let L = 0; const P = pootje.curvePoints;
-  for(let i=1;i<P.length;i++) L += Math.hypot(P[i][0]-P[i-1][0], P[i][1]-P[i-1][1]);
-  return L;
-}
-function buildTempleGeometries(pootje, side, socket){
+function buildTempleGeometries(pootje, side){
   pootje.calibratedLengthScaled ??= arcLengthOf(pootje);
-  if(socket) socket.calibratedLengthScaled ??= arcLengthOf(socket);
-  const native = !socket || socket.id === pootje.id;
-  const L = pootje.calibratedLengthScaled;
-  const k = s => native ? 1 : THREE.MathUtils.clamp(s / SOCKET_MM, 0, 1);     // linear: a clean cone, no collar or neck
-  const blend = (a, b, s) => a + (b - a) * k(s);
-  // centre line: own curve, with its root zone pulled onto the socket's root
-  const n = pootje.curvePoints.length;
-  const pts = pootje.curvePoints.map(([z,y], i) => {
-    const s = i/(n-1)*L;
-    let zz = z, yy = y, xx = lateralAt(pootje, s);
-    if(!native && s < SOCKET_MM){
-      const [zs, ys] = curveAt(socket, s);
-      zz = blend(zs, z, s); yy = blend(ys, y, s); xx = blend(lateralAt(socket, s), xx, s);
-    }
-    return new THREE.Vector3(side * xx, yy, zz);
-  });
+  const L = pootje.calibratedLengthScaled, n = pootje.curvePoints.length;
+  const pts = pootje.curvePoints.map(([z,y], i) => new THREE.Vector3(side * lateralAt(pootje, i/(n-1)*L), y, z));
   const curve = new THREE.CatmullRomCurve3(pts);
   const segments = 120, radial = 20;
   const P = curve.getSpacedPoints(segments);
@@ -765,8 +739,7 @@ function buildTempleGeometries(pootje, side, socket){
     const Lx = xHat.clone().addScaledVector(T, -T.dot(xHat)).normalize();
     const V = new THREE.Vector3().crossVectors(Lx, T).normalize();
     const finish = finishAt(pootje, f);
-    let h = heightAt(pootje, s), w = widthAt(pootje, s);
-    if(!native && s < SOCKET_MM){ h = blend(heightAt(socket, s), h, s); w = blend(widthAt(socket, s), w, s); }
+    const h = heightAt(pootje, s), w = widthAt(pootje, s);
     const e = finish === 'metal' ? 2.0 : 3.2; // super-ellipse exponent (AANGENOMEN)
     return { p, L:Lx, V, rx:w/2, ry:h/2, e, f };
   });
@@ -840,13 +813,23 @@ function buildNosePads(montuur, armMaterial){
 function buildGlassesGroup(montuur, pootje, material, lensMaterial){
   const group = new THREE.Group();
   group.add(new THREE.Mesh(buildFrontGeometry(montuur), material));
-  const socket = montuur.nativePootje ? scaledPootje(getPootje(montuur.nativePootje)) : null;
+  // where the montuur's OWN original pootje touches the end piece: its root
+  // height and lateral thickness (measured, ~2 mm behind the pivot). Every
+  // pootje is centred on that contact height and placed with its OUTER face
+  // flush with the original's outer face — so a thicker pootje tucks in
+  // behind the end piece instead of sticking out sideways. Shapes unchanged.
+  const own = Object.assign(pootje, { calibratedLengthScaled: pootje.calibratedLengthScaled ?? arcLengthOf(pootje) });
+  let dx = 0;
+  if(montuur.nativePootje && montuur.nativePootje !== pootje.id){
+    const nat = scaledPootje(getPootje(montuur.nativePootje)); nat.calibratedLengthScaled = arcLengthOf(nat);
+    dx = (widthAt(nat, 2) - widthAt(own, 2)) / 2;
+  }
   buildNosePads(montuur, material).forEach(m => group.add(m));
   [1,-1].forEach(side=>{
     group.add(new THREE.Mesh(buildLensGeometry(montuur, side), lensMaterial));
-    for(const { geo, seg } of buildTempleGeometries(pootje, side, socket)){
+    for(const { geo, seg } of buildTempleGeometries(pootje, side)){
       const mesh = new THREE.Mesh(geo, seg ? getFixedMaterial(seg) : material);
-      mesh.position.set(side*montuur.hinge.x, montuur.hinge.y, montuur.hinge.z);
+      mesh.position.set(side*(montuur.hinge.x + dx), montuur.hinge.y, montuur.hinge.z);
       group.add(mesh);
     }
   });
