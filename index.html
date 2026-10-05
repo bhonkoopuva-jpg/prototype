@@ -79,6 +79,7 @@
   }
   .wheel-chip .wheel-thumb img{ width:100%; height:100%; object-fit:contain; }
   .wheel-chip .wheel-thumb.swatch-dot{ border-radius:50%; }
+  .wheel-chip .wheel-thumb.part{ width:60px; border-radius:17px; }
   .wheel-chip .wheel-label{ font-size:.78rem; font-weight:600; color:var(--ink); white-space:nowrap; }
   .wheel-chip .wheel-price{ font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 
@@ -1149,16 +1150,71 @@ function refresh(){
   if(!tryonModal.hidden) syncARModel();
 }
 
-/* ---------- small inline icons for the option chips (schematic, not
-   photos — these are generic style indicators, not renders of the 3D
-   model) ---------- */
-function montuurIcon(shape){
-  if(shape==='round') return '<svg viewBox="0 0 34 20" width="26" height="16"><g fill="none" stroke="#4a4238" stroke-width="2"><circle cx="9" cy="10" r="8"/><circle cx="25" cy="10" r="8"/><path d="M17 9h0"/></g></svg>';
-  return '<svg viewBox="0 0 34 20" width="26" height="16"><g fill="none" stroke="#4a4238" stroke-width="2"><rect x="1" y="2" width="14" height="16" rx="3"/><rect x="19" y="2" width="14" height="16" rx="3"/></g></svg>';
+/* ---------- option-chip thumbnails: real renders of the SAME geometry ----------
+   Each montuur chip shows that montuur's actual front (built with
+   buildFrontGeometry / buildNosePads from its scaled data; lenses left
+   out so the frame line reads clearly at chip size), each pootje chip shows that pootje's actual side profile (built
+   with buildTempleGeometries, incl. its fixed segments) — both in the
+   currently selected materiaal. Rendered once per (part, materiaal) on a
+   small offscreen renderer and cached as an image. */
+const THUMB_W = 120, THUMB_H = 68;                       // 2× the 60×34 chip
+let thumbRenderer = null, thumbScene = null;
+const thumbCache = new Map();
+function getThumbRenderer(){
+  if(thumbRenderer) return thumbRenderer;
+  const cv = document.createElement('canvas'); cv.width = THUMB_W; cv.height = THUMB_H;
+  thumbRenderer = new THREE.WebGLRenderer({ canvas:cv, antialias:true, alpha:true, preserveDrawingBuffer:true });
+  thumbRenderer.setPixelRatio(1); thumbRenderer.setSize(THUMB_W, THUMB_H, false);
+  if('outputColorSpace' in thumbRenderer) thumbRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  thumbRenderer.toneMapping = renderer.toneMapping;
+  thumbRenderer.toneMappingExposure = renderer.toneMappingExposure * 1.25;   // thin parts at chip size read darker than on stage
+  thumbScene = new THREE.Scene();
+  thumbScene.environment = scene.environment;
+  [hemi, keyLight, fillLight, rimLight].forEach(l => thumbScene.add(l.clone()));
+  return thumbRenderer;
 }
-function pootjeIcon(style){
-  const w = style==='bold' ? 3.4 : 1.6;
-  return `<svg viewBox="0 0 34 14" width="26" height="12"><line x1="2" y1="3" x2="30" y2="10" stroke="#4a4238" stroke-width="${w}" stroke-linecap="round"/></svg>`;
+function renderThumb(meshes, view){
+  const r = getThumbRenderer();
+  const holder = new THREE.Group(); meshes.forEach(m => holder.add(m));
+  thumbScene.add(holder);
+  const box = new THREE.Box3().setFromObject(holder), ctr = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+  // fit the part's projected extent into the chip with a small margin
+  const w = view === 'side' ? size.z : size.x, h = size.y, aspect = THUMB_W / THUMB_H;
+  const half = Math.max(w / 2, (h / 2) * aspect) * 1.1;
+  const cam = new THREE.OrthographicCamera(-half, half, half / aspect, -half / aspect, 0.1, 1000);
+  if(view === 'side') cam.position.set(ctr.x + 300, ctr.y, ctr.z); else cam.position.set(ctr.x, ctr.y, ctr.z + 300);
+  cam.lookAt(ctr);
+  r.setClearColor(0xffffff, 0); r.clear();
+  r.render(thumbScene, cam);
+  const url = r.domElement.toDataURL('image/png');
+  thumbScene.remove(holder);
+  meshes.forEach(m => m.geometry.dispose());
+  return url;
+}
+function thumbMaterial(){
+  // the configurator's current finish (colour, gloss, translucency) as-is
+  const m = sharedMaterial.clone(); m.transmission = 0; m.thickness = 0;   // no backdrop in a chip
+  return m;
+}
+function montuurThumb(item){
+  const key = 'M' + item.id + '|' + state.materiaal;
+  if(!thumbCache.has(key)){
+    const m = scaledMontuur(item), mat = thumbMaterial();
+    const meshes = [new THREE.Mesh(buildFrontGeometry(m), mat), ...buildNosePads(m, mat)];
+    thumbCache.set(key, renderThumb(meshes, 'front'));
+    mat.dispose();
+  }
+  return thumbCache.get(key);
+}
+function pootjeThumb(item){
+  const key = 'P' + item.id + '|' + state.materiaal;
+  if(!thumbCache.has(key)){
+    const p = scaledPootje(item), mat = thumbMaterial();
+    const meshes = buildTempleGeometries(p, 1).map(({ geo, seg }) => new THREE.Mesh(geo, seg ? getFixedMaterial(seg) : mat));
+    thumbCache.set(key, renderThumb(meshes, 'side'));
+    mat.dispose();
+  }
+  return thumbCache.get(key);
 }
 
 /* ---------- price + ref code ---------- */
@@ -1174,10 +1230,11 @@ function renderRow(listId, items, selectedId, isColor, onPick){
     thumb.className = 'wheel-thumb' + (isColor ? ' swatch-dot' : '');
     if(isColor){
       thumb.style.background = item.hex;
-    } else if(item.shape){
-      thumb.innerHTML = montuurIcon(item.shape);
-    } else if(item.style){
-      thumb.innerHTML = pootjeIcon(item.style);
+    } else {
+      thumb.classList.add('part');
+      const img = document.createElement('img'); img.alt = '';
+      img.src = listId === 'montuurRow' ? montuurThumb(item) : pootjeThumb(item);
+      thumb.appendChild(img);
     }
     chip.appendChild(thumb);
 
