@@ -921,9 +921,7 @@ function buildNosePads(montuur, armMaterial){
 }
 function buildGlassesGroup(montuur, pootje, material, lensMaterial){
   const group = new THREE.Group();
-  const frontMesh = new THREE.Mesh(buildFrontGeometry(montuur), material);
-  frontMesh.userData.part = 'front'; // tag only
-  group.add(frontMesh);
+  group.add(new THREE.Mesh(buildFrontGeometry(montuur), material));
   // where the montuur's OWN original pootje touches the end piece: its root
   // height and lateral thickness (measured, ~2 mm behind the pivot). Every
   // pootje is centred on that contact height and placed with its OUTER face
@@ -945,7 +943,6 @@ function buildGlassesGroup(montuur, pootje, material, lensMaterial){
       // its 0.5 mm overlap instead of floating just behind the front
       const zIn = wrapZ(montuur, montuur.hinge.x + Math.min(dx, 0)) - wrapZ(montuur, montuur.hinge.x);
       mesh.position.set(side*(montuur.hinge.x + dx), montuur.hinge.y, montuur.hinge.z + zIn);
-      mesh.userData.templeSide = side; // tag only: AR pivots temples about mesh.position (= the hinge); no effect on the preview
       group.add(mesh);
     }
   });
@@ -1477,162 +1474,15 @@ const arAnchor = new THREE.Group();
 arAnchor.visible = false;
 arScene.add(arAnchor);
 
-const AR_FACE_V10 = [0,-341,598,0,-113,748,0,-209,606,-46,96,663,0,-46,759,0,37,724,0,247,579,-425,258,328,0,402,528,0,489,539,0,826,448,0,-371,586,0,-392,557,0,-399,522,0,-454,540,0,-475,553,0,-502,560,0,-537,554,0,-615,507,0,-150,711,-42,-147,645,-709,543,10,-263,204,385,-320,199,380,-378,204,365,-447,242,316,-216,219,385,-321,322,412,-267,321,409,-375,317,397,-416,306,372,-506,193,278,-227,-743,439,-445,266,317,-721,226,7,-580,235,220,-284,-72,443,-71,-333,588,-61,-392,544,-143,-350,550,-191,-380,503,-113,-397,519,-156,-408,484,-265,-500,419,-43,-109,736,-50,-48,744,-525,388,336,-172,97,456,-161,-94,581,-165,-61,558,-477,-70,353,-48,30,710,-373,451,455,-459,430,405,-628,662,143,-122,414,511,-219,310,400,-310,-435,410,-672,-479,-175,-119,-131,574,-73,-159,583,-246,-434,428,-220,-430,416,-499,480,375,-159,-126,546,-264,452,492,-276,510,502,-352,801,373,-560,572,272,-306,657,453,-572,425,283,-637,479,159,-67,-369,574,-126,-379,542,-173,-395,500,-104,-146,566,-232,-433,426,-206,-448,452,-215,-428,404,-95,-104,651,-147,-404,460,-102,-399,493,-53,-399,514,-77,-610,499,-70,-529,545,-67,-495,551,-63,-470,545,-58,-452,534,-154,-442,475,-162,-448,481,-173,-462,485,-184,-483,482,-237,-311,487,-754,-105,-243,0,-172,660,-183,-440,440,-193,-441,450,-60,-201,587,-141,-171,524,-66,-182,586,-234,57,429,-333,10,411,-173,-92,527,-513,749,266,-454,632,368,-399,511,447,-217,-544,446,-140,501,532,-162,660,492,-189,824,427,-420,224,338,-573,141,243,-186,236,384,-499,307,308,-130,142,483,-131,-67,642,-647,94,169,-526,95,297,-443,72,352,-330,86,387,-243,113,404,-182,147,422,-56,231,557,-634,-53,188,-559,321,269,-24,-146,707,-161,34,490,-774,236,-201,-139,185,445,-179,-98,485,-467,266,308,-133,-28,610,-727,-289,-225,-186,259,376,-92,7,667,-500,-614,189,-509,-718,71,-716,-81,-7,-584,-525,92,-685,366,72,-241,-826,412,-18,-169,657,-210,-16,457,-641,224,156,-367,236,364,-318,229,378,-220,-460,448,-623,-194,166,-129,-930,409,-321,-853,280,-407,-799,193,0,655,503,0,-940,426,-272,232,378,-229,240,370,-200,250,369,-613,340,204,-229,289,378,-272,296,387,-318,296,388,-367,293,372,-402,286,348,-756,411,-99,-402,248,344,0,-252,593,-178,-268,521,-122,-118,595,-73,-254,582,0,327,524,-414,-700,267,-331,-766,338,-131,-864,470,-594,-622,-63,-200,274,374,-90,124,575,0,-877,489,-231,-897,361,-695,-244,-13,-110,-446,512,-118,-458,519,-126,-479,524,-133,-511,521,-155,-582,476,-195,-418,443,-212,-414,456,-229,-405,458,-285,-367,448,-528,-224,286,-95,191,520,-131,310,423,-178,286,388,-185,-410,425,-544,-403,211,-77,318,486,-194,-661,452,0,106,677,-52,158,615,0,173,632,-125,23,568,0,-794,518,0,-699,515,-100,-693,498,-329,-538,380,-231,-157,459,-268,-611,410,-383,-154,414,-296,-227,444,-439,-268,364,-122,-783,497,-154,-14,520,-388,-604,331,-308,-681,381,-375,-450,373,-609,-321,147,-459,-473,298,-658,-394,7,-349,-320,413,-126,80,531,-113,-93,654,-144,-114,591,-92,-53,700,-176,353,433,-263,371,436,-339,372,431,-408,368,408,-462,347,365,-517,254,267,-730,76,-5,-471,165,311,-407,148,348,-327,147,373,-253,162,387,-197,186,396,-158,210,408,-766,67,-244,-140,-134,563,-88,66,623,-77,-97,708,-46,-133,679,-75,-107,680,-124,-159,548,-39,-141,696,-32,-161,651,-164,256,386,-126,247,420,-103,238,462,-425,277,332,-453,291,334,46,96,663,425,258,328,42,-147,645,709,543,10,263,204,385,320,199,380,378,204,365,447,242,316,216,219,385,321,322,412,267,321,409,375,317,397,416,306,372,506,193,278,227,-743,439,445,266,317,721,226,7,580,235,220,284,-72,443,71,-333,588,61,-392,544,143,-350,550,191,-380,503,113,-397,519,156,-408,484,265,-500,419,43,-109,736,50,-48,744,525,388,336,172,97,456,161,-94,581,165,-61,558,477,-70,353,48,30,710,373,451,455,459,430,405,628,662,143,122,414,511,219,310,400,310,-435,410,672,-479,-175,119,-131,574,73,-159,583,246,-434,428,220,-430,416,499,480,375,159,-126,546,264,452,492,276,510,502,352,801,373,560,572,272,306,657,453,572,425,283,637,479,159,67,-369,574,126,-379,542,173,-395,500,104,-146,566,232,-433,426,206,-448,452,215,-428,404,95,-104,651,147,-404,460,102,-399,493,53,-399,514,77,-610,499,70,-529,545,67,-495,551,63,-470,545,58,-452,534,154,-442,475,162,-448,481,173,-462,485,184,-483,482,237,-311,487,754,-105,-243,183,-440,440,193,-441,450,60,-201,587,141,-171,524,66,-182,586,234,57,429,333,10,411,173,-92,527,513,749,266,454,632,368,399,511,447,217,-544,446,140,501,532,162,660,492,189,824,427,420,224,338,573,141,243,186,236,384,499,307,308,130,142,483,131,-67,642,647,94,169,526,95,297,443,72,352,330,86,387,243,113,404,182,147,422,56,231,557,634,-53,188,559,321,269,24,-146,707,161,34,490,774,236,-201,139,185,445,179,-98,485,467,266,308,133,-28,610,727,-289,-225,186,259,376,92,7,667,500,-614,189,509,-718,71,716,-81,-7,584,-525,92,685,366,72,241,-826,412,18,-169,657,210,-16,457,641,224,156,367,236,364,318,229,378,220,-460,448,623,-194,166,129,-930,409,321,-853,280,407,-799,193,272,232,378,229,240,370,200,250,369,613,340,204,229,289,378,272,296,387,318,296,388,367,293,372,402,286,348,756,411,-99,402,248,344,178,-268,521,122,-118,595,73,-254,582,414,-700,267,331,-766,338,131,-864,470,594,-622,-63,200,274,374,90,124,575,231,-897,361,695,-244,-13,110,-446,512,118,-458,519,126,-479,524,133,-511,521,155,-582,476,195,-418,443,212,-414,456,229,-405,458,285,-367,448,528,-224,286,95,191,520,131,310,423,178,286,388,185,-410,425,544,-403,211,77,318,486,194,-661,452,52,158,615,125,23,568,100,-693,498,329,-538,380,231,-157,459,268,-611,410,383,-154,414,296,-227,444,439,-268,364,122,-783,497,154,-14,520,388,-604,331,308,-681,381,375,-450,373,609,-321,147,459,-473,298,658,-394,7,349,-320,413,126,80,531,113,-93,654,144,-114,591,92,-53,700,176,353,433,263,371,436,339,372,431,408,368,408,462,347,365,517,254,267,730,76,-5,471,165,311,407,148,348,327,147,373,253,162,387,197,186,396,158,210,408,766,67,-244,140,-134,563,88,66,623,77,-97,708,46,-133,679,75,-107,680,124,-159,548,39,-141,696,32,-161,651,164,256,386,126,247,420,103,238,462,425,277,332,453,291,334]; // 468 canonical MediaPipe landmarks, x/y/z in 0.1 mm
-const AR_FACE_TRIS = [173,155,133,246,33,7,382,398,362,263,466,249,308,415,324,78,95,191,356,389,264,127,34,162,368,264,389,139,162,34,267,0,302,37,72,0,11,302,0,11,0,72,349,451,350,120,121,231,452,350,451,232,231,121,267,302,269,37,39,72,303,269,302,73,72,39,357,343,350,128,121,114,277,350,343,47,114,121,350,452,357,121,128,232,453,357,452,233,232,128,299,333,297,69,67,104,332,297,333,103,104,67,175,152,396,175,171,152,377,396,152,148,152,171,381,384,382,154,155,157,398,382,384,173,157,155,280,347,330,50,101,118,348,330,347,119,118,101,269,303,270,39,40,73,304,270,303,74,73,40,9,336,151,9,151,107,337,151,336,108,107,151,344,278,360,115,131,48,279,360,278,49,48,131,262,431,418,32,194,211,424,418,431,204,211,194,304,408,270,74,40,184,409,270,408,185,184,40,272,310,407,42,183,80,415,407,310,191,80,183,322,270,410,92,186,40,409,410,270,185,40,186,347,449,348,118,119,229,450,348,449,230,229,119,434,432,430,214,210,212,422,430,432,202,212,210,313,314,18,83,18,84,17,18,314,17,84,18,307,375,306,77,76,146,291,306,375,61,146,76,259,387,260,29,30,160,388,260,387,161,160,30,286,414,384,56,157,190,398,384,414,173,190,157,418,424,406,194,182,204,335,406,424,106,204,182,367,416,364,138,135,192,434,364,416,214,192,135,391,423,327,165,98,203,358,327,423,129,203,98,298,301,284,68,54,71,251,284,301,21,71,54,4,275,5,4,5,45,281,5,275,51,45,5,254,373,253,24,23,144,374,253,373,145,144,23,320,321,307,90,77,91,375,307,321,146,91,77,280,425,411,50,187,205,427,411,425,207,205,187,421,313,200,201,200,83,18,200,313,18,83,200,335,321,406,106,182,91,405,406,321,181,91,182,405,321,404,181,180,91,320,404,321,90,91,180,17,314,16,17,16,84,315,16,314,85,84,16,425,266,426,205,206,36,423,426,266,203,36,206,369,396,400,140,176,171,377,400,396,148,171,176,391,269,322,165,92,39,270,322,269,40,39,92,417,465,413,193,189,245,464,413,465,244,245,189,257,258,386,27,159,28,385,386,258,158,28,159,260,388,467,30,247,161,466,467,388,246,161,247,248,456,419,3,196,236,399,419,456,174,236,196,333,298,332,104,103,68,284,332,298,54,68,103,285,8,417,55,193,8,168,417,8,168,8,193,340,261,346,111,117,31,448,346,261,228,31,117,285,417,441,55,221,193,413,441,417,189,193,221,327,460,326,98,97,240,328,326,460,99,240,97,277,355,329,47,100,126,371,329,355,142,126,100,309,392,438,79,218,166,439,438,392,219,166,218,381,382,256,154,26,155,341,256,382,112,155,26,360,279,420,131,198,49,429,420,279,209,49,198,365,364,379,136,150,135,394,379,364,169,135,150,355,277,437,126,217,47,343,437,277,114,47,217,443,444,282,223,52,224,283,282,444,53,224,52,281,275,363,51,134,45,440,363,275,220,45,134,431,262,395,211,170,32,369,395,262,140,32,170,337,299,338,108,109,69,297,338,299,67,69,109,335,273,321,106,91,43,375,321,273,146,43,91,348,450,349,119,120,230,451,349,450,231,230,120,467,359,342,247,113,130,446,342,359,226,130,113,282,283,334,52,105,53,293,334,283,63,53,105,250,458,462,20,242,238,461,462,458,241,238,242,276,353,300,46,70,124,383,300,353,156,124,70,325,292,324,96,95,62,308,324,292,78,62,95,283,276,293,53,63,46,300,293,276,70,46,63,447,264,345,227,116,34,372,345,264,143,34,116,352,345,346,123,117,116,340,346,345,111,116,117,1,19,274,1,44,19,354,274,19,125,19,44,248,281,456,3,236,51,363,456,281,134,51,236,425,426,427,205,207,206,436,427,426,216,206,207,380,381,252,153,22,154,256,252,381,26,154,22,391,393,269,165,39,167,267,269,393,37,167,39,199,428,200,199,200,208,421,200,428,201,208,200,330,329,266,101,36,100,371,266,329,142,100,36,422,432,273,202,43,212,287,273,432,57,212,43,290,250,328,60,99,20,462,328,250,242,20,99,258,286,385,28,158,56,384,385,286,157,56,158,342,446,353,113,124,226,265,353,446,35,226,124,257,386,259,27,29,159,387,259,386,160,159,29,430,422,431,210,211,202,424,431,422,204,202,211,445,342,276,225,46,113,353,276,342,124,113,46,424,422,335,204,106,202,273,335,422,43,202,106,306,292,307,76,77,62,325,307,292,96,62,77,366,447,352,137,123,227,345,352,447,116,227,123,302,268,303,72,73,38,271,303,268,41,38,73,371,358,266,142,36,129,423,266,358,203,129,36,327,294,460,98,240,64,455,460,294,235,64,240,294,331,278,64,48,102,279,278,331,49,102,48,303,271,304,73,74,41,272,304,271,42,41,74,427,436,434,207,214,216,432,434,436,212,216,214,304,272,408,74,184,42,407,408,272,183,42,184,394,430,395,169,170,210,431,395,430,211,210,170,395,369,378,170,149,140,400,378,369,176,140,149,296,334,299,66,69,105,333,299,334,104,105,69,417,168,351,193,122,168,6,351,168,6,168,122,280,411,352,50,123,187,376,352,411,147,187,123,319,320,325,89,96,90,307,325,320,77,90,96,285,295,336,55,107,65,296,336,295,66,65,107,404,320,403,180,179,90,319,403,320,89,90,179,330,348,329,101,100,119,349,329,348,120,119,100,334,293,333,105,104,63,298,333,293,68,63,104,323,454,366,93,137,234,447,366,454,227,234,137,16,315,15,16,15,85,316,15,315,86,85,15,429,279,358,209,129,49,331,358,279,102,49,129,15,316,14,15,14,86,317,14,316,87,86,14,8,285,9,8,9,55,336,9,285,107,55,9,329,349,277,100,47,120,350,277,349,121,120,47,252,253,380,22,153,23,374,380,253,145,23,153,402,403,318,178,88,179,319,318,403,89,179,88,351,6,419,122,196,6,197,419,6,197,6,196,324,318,325,95,96,88,319,325,318,89,88,96,397,367,365,172,136,138,364,365,367,135,138,136,288,435,397,58,172,215,367,397,435,138,215,172,438,439,344,218,115,219,278,344,439,48,219,115,271,311,272,41,42,81,310,272,311,80,81,42,5,281,195,5,195,51,248,195,281,3,51,195,273,287,375,43,146,57,291,375,287,61,57,146,396,428,175,171,175,208,199,175,428,199,208,175,268,312,271,38,41,82,311,271,312,81,82,41,444,445,283,224,53,225,276,283,445,46,225,53,254,339,373,24,144,110,390,373,339,163,110,144,295,282,296,65,66,52,334,296,282,105,52,66,346,448,347,117,118,228,449,347,448,229,228,118,454,356,447,234,227,127,264,447,356,34,127,227,336,296,337,107,108,66,299,337,296,69,66,108,151,337,10,151,10,108,338,10,337,109,108,10,278,439,294,48,64,219,455,294,439,235,219,64,407,415,292,183,62,191,308,292,415,78,191,62,358,371,429,129,209,142,355,429,371,126,142,209,345,372,340,116,111,143,265,340,372,35,143,111,388,390,466,161,246,163,249,466,390,7,163,246,352,346,280,123,50,117,347,280,346,118,117,50,295,442,282,65,52,222,443,282,442,223,222,52,19,94,354,19,125,94,370,354,94,141,94,125,295,285,442,65,222,55,441,442,285,221,55,222,419,197,248,196,3,197,195,248,197,195,197,3,359,263,255,130,25,33,249,255,263,7,33,25,275,274,440,45,220,44,457,440,274,237,44,220,300,383,301,70,71,156,368,301,383,139,156,71,417,351,465,193,245,122,412,465,351,188,122,245,466,263,467,246,247,33,359,467,263,130,33,247,389,251,368,162,139,21,301,368,251,71,21,139,374,386,380,145,153,159,385,380,386,158,159,153,379,394,378,150,149,169,395,378,394,170,169,149,351,419,412,122,188,196,399,412,419,174,196,188,426,322,436,206,216,92,410,436,322,186,92,216,387,373,388,160,161,144,390,388,373,163,144,161,393,326,164,167,164,97,2,164,326,2,97,164,354,370,461,125,241,141,462,461,370,242,141,241,0,267,164,0,164,37,393,164,267,167,37,164,11,12,302,11,72,12,268,302,12,38,12,72,386,374,387,159,160,145,373,387,374,144,145,160,12,13,268,12,38,13,312,268,13,82,13,38,293,300,298,63,68,70,301,298,300,71,70,68,340,265,261,111,31,35,446,261,265,226,35,31,380,385,381,153,154,158,384,381,385,157,158,154,280,330,425,50,205,101,266,425,330,36,101,205,423,391,426,203,206,165,322,426,391,92,165,206,429,355,420,209,198,126,437,420,355,217,126,198,391,327,393,165,167,98,326,393,327,97,98,167,457,438,440,237,220,218,344,440,438,115,218,220,382,362,341,155,112,133,463,341,362,243,133,112,457,461,459,237,239,241,458,459,461,238,241,239,434,430,364,214,135,210,394,364,430,169,210,135,414,463,398,190,173,243,362,398,463,133,243,173,262,428,369,32,140,208,396,369,428,171,208,140,457,274,461,237,241,44,354,461,274,125,44,241,316,403,317,86,87,179,402,317,403,178,179,87,315,404,316,85,86,180,403,316,404,179,180,86,314,405,315,84,85,181,404,315,405,180,181,85,313,406,314,83,84,182,405,314,406,181,182,84,418,406,421,194,201,182,313,421,406,83,182,201,366,401,323,137,93,177,361,323,401,132,177,93,408,407,306,184,76,183,292,306,407,62,183,76,408,306,409,184,185,76,291,409,306,61,76,185,410,409,287,186,57,185,291,287,409,61,185,57,436,410,432,216,212,186,287,432,410,57,186,212,434,416,427,214,207,192,411,427,416,187,192,207,264,368,372,34,143,139,383,372,368,156,139,143,457,459,438,237,218,239,309,438,459,79,239,218,352,376,366,123,137,147,401,366,376,177,147,137,4,1,275,4,45,1,274,275,1,44,1,45,428,262,421,208,201,32,418,421,262,194,32,201,327,358,294,98,64,129,331,294,358,102,129,64,367,435,416,138,192,215,433,416,435,213,215,192,455,439,289,235,59,219,392,289,439,166,219,59,328,462,326,99,97,242,370,326,462,141,242,97,326,370,2,97,2,141,94,2,370,94,141,2,460,455,305,240,75,235,289,305,455,59,235,75,448,339,449,228,229,110,254,449,339,24,110,229,261,446,255,31,25,226,359,255,446,130,226,25,449,254,450,229,230,24,253,450,254,23,24,230,450,253,451,230,231,23,252,451,253,22,23,231,451,252,452,231,232,22,256,452,252,26,22,232,256,341,452,26,232,112,453,452,341,233,112,232,413,464,414,189,190,244,463,414,464,243,244,190,441,413,286,221,56,189,414,286,413,190,189,56,441,286,442,221,222,56,258,442,286,28,56,222,442,258,443,222,223,28,257,443,258,27,28,223,444,443,259,224,29,223,257,259,443,27,223,29,259,260,444,29,224,30,445,444,260,225,30,224,260,467,445,30,225,247,342,445,467,113,247,225,250,309,458,20,238,79,459,458,309,239,79,238,290,305,392,60,166,75,289,392,305,59,75,166,460,305,328,240,99,75,290,328,305,60,75,99,376,433,401,147,177,213,435,401,433,215,213,177,250,290,309,20,79,60,392,309,290,166,60,79,411,416,376,187,147,192,433,376,416,213,192,147,341,463,453,112,233,243,464,453,463,244,243,233,453,464,357,233,128,244,465,357,464,245,244,128,412,343,465,188,245,114,357,465,343,128,114,245,437,343,399,217,174,114,412,399,343,188,114,174,363,440,360,134,131,220,344,360,440,115,220,131,456,420,399,236,174,198,437,399,420,217,198,174,456,363,420,236,198,134,360,420,363,131,134,198,361,401,288,132,58,177,435,288,401,215,177,58,353,265,383,124,156,35,372,383,265,143,35,156,255,249,339,25,110,7,390,339,249,163,7,110,261,255,448,31,228,25,339,448,255,110,25,228,14,317,13,14,13,87,312,13,317,82,87,13,317,402,312,87,82,178,311,312,402,81,178,82,402,318,311,178,81,88,310,311,318,80,88,81,318,324,310,88,80,95,415,310,324,191,95,80];
-
-// Pootje placement in AR: every temple is the configurator's own mesh,
-// rotated RIGIDLY about its hinge (mesh.position). Nothing is re-modelled,
-// bent or scaled; only a pivot group around the existing meshes turns.
-const AR_NOSE_CLEARANCE = 0.6;   // mm gap between rim/bridge and the nose surface
-const AR_EAR_Z = -50;            // AANGENOMEN: canonical depth where the temple rests on the ear
-const AR_TEMPLE_PEN = 0.8;       // mm the temple's inner face may sink into hair/skin (soft contact)
-const AR_YAW_MIN = -4*Math.PI/180, AR_YAW_MAX = 12*Math.PI/180; // outward swing limits
-const AR_PITCH_MIN = -1.5*Math.PI/180, AR_PITCH_MAX = 5*Math.PI/180;
-const AR_TEMPLE_TARGET_DROP = -2; // mm below hinge height where the temple meets the ear
-const AR_DEPTH_SHIFT_MIN = -8, AR_DEPTH_SHIFT_MAX = 6; // mm the frame may slide back/forward to rest on the nose
-const AR_SKULL = { cy:-5, cz:-50, a:77, b:110, c:95 };  // AANGENOMEN skull behind the face mesh (canonical frame)
-const AR_PUPIL = [0, 26.358, 38.263];                    // canonical pupil midpoint (mm)
-const AR_CANON = (()=>{ const v = new Float32Array(AR_FACE_V10.length); for(let i=0;i<v.length;i++) v[i] = AR_FACE_V10[i]/10; return v; })();
-// stable landmarks only (forehead, brows, eye corners, nose, cheek edges)
-const AR_POSE_LM = [10,67,297,109,338,105,334,107,336,33,133,362,263,168,6,197,195,5,4,1,98,327,129,358,234,454,127,356,93,323,132,361];
-function arCanonPoint(i, flipX){ return [(flipX?-1:1)*AR_CANON[i*3], AR_CANON[i*3+1], AR_CANON[i*3+2]]; }
-function arJacobiEigen4(N){
-  const a = N.map(r=>r.slice());
-  const v = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
-  for(let sweep=0; sweep<60; sweep++){
-    let off = 0;
-    for(let i=0;i<4;i++) for(let j=i+1;j<4;j++) off += a[i][j]*a[i][j];
-    if(off < 1e-20) break;
-    for(let p=0;p<3;p++) for(let q=p+1;q<4;q++){
-      if(Math.abs(a[p][q]) < 1e-30) continue;
-      const theta = (a[q][q]-a[p][p])/(2*a[p][q]);
-      const t = (theta>=0?1:-1)/(Math.abs(theta)+Math.sqrt(theta*theta+1));
-      const c = 1/Math.sqrt(t*t+1), s = t*c;
-      for(let k=0;k<4;k++){ const x=a[k][p], y=a[k][q]; a[k][p]=c*x-s*y; a[k][q]=s*x+c*y; }
-      for(let k=0;k<4;k++){ const x=a[p][k], y=a[q][k]; a[p][k]=c*x-s*y; a[q][k]=s*x+c*y; }
-      for(let k=0;k<4;k++){ const x=v[k][p], y=v[k][q]; v[k][p]=c*x-s*y; v[k][q]=s*x+c*y; }
-    }
-  }
-  let best = 0;
-  for(let i=1;i<4;i++) if(a[i][i] > a[best][best]) best = i;
-  return [v[0][best], v[1][best], v[2][best], v[3][best]];
-}
-// Horn (1987) absolute orientation with scale: finds s, q, t minimising
-// |obs - (s*R(q)*canon + t)|. canonPts/obsPts: arrays of [x,y,z].
-function arFitPose(canonPts, obsPts){
-  const n = canonPts.length;
-  const ac=[0,0,0], bc=[0,0,0];
-  for(let i=0;i<n;i++) for(let k=0;k<3;k++){ ac[k]+=canonPts[i][k]/n; bc[k]+=obsPts[i][k]/n; }
-  let Sxx=0,Sxy=0,Sxz=0,Syx=0,Syy=0,Syz=0,Szx=0,Szy=0,Szz=0, sa=0, sb=0;
-  for(let i=0;i<n;i++){
-    const a=[canonPts[i][0]-ac[0],canonPts[i][1]-ac[1],canonPts[i][2]-ac[2]];
-    const b=[obsPts[i][0]-bc[0],obsPts[i][1]-bc[1],obsPts[i][2]-bc[2]];
-    Sxx+=a[0]*b[0]; Sxy+=a[0]*b[1]; Sxz+=a[0]*b[2];
-    Syx+=a[1]*b[0]; Syy+=a[1]*b[1]; Syz+=a[1]*b[2];
-    Szx+=a[2]*b[0]; Szy+=a[2]*b[1]; Szz+=a[2]*b[2];
-    sa+=a[0]*a[0]+a[1]*a[1]+a[2]*a[2]; sb+=b[0]*b[0]+b[1]*b[1]+b[2]*b[2];
-  }
-  const N = [
-    [Sxx+Syy+Szz, Syz-Szy, Szx-Sxz, Sxy-Syx],
-    [Syz-Szy, Sxx-Syy-Szz, Sxy+Syx, Szx+Sxz],
-    [Szx-Sxz, Sxy+Syx, -Sxx+Syy-Szz, Syz+Szy],
-    [Sxy-Syx, Szx+Sxz, Syz+Szy, -Sxx-Syy+Szz],
-  ];
-  const e = arJacobiEigen4(N); // [w,x,y,z]
-  const q = new THREE.Quaternion(e[1],e[2],e[3],e[0]).normalize();
-  const s = Math.sqrt(sb/sa);
-  const ra = new THREE.Vector3(ac[0],ac[1],ac[2]).applyQuaternion(q).multiplyScalar(s);
-  const t = new THREE.Vector3(bc[0]-ra.x, bc[1]-ra.y, bc[2]-ra.z);
-  let err = 0;
-  for(let i=0;i<n;i++){
-    const p = new THREE.Vector3(...canonPts[i]).applyQuaternion(q).multiplyScalar(s).add(t);
-    err += p.distanceToSquared(new THREE.Vector3(...obsPts[i]));
-  }
-  return { s, q, t, rms: Math.sqrt(err/n) };
-}function arBuildHead(){
-  const X0=-100, Y0=-110, NX=201, NY=221; // 1 mm cells
-  const depth = new Float32Array(NX*NY).fill(-1e9);
-  const V = AR_CANON, T = AR_FACE_TRIS;
-  for(let t=0;t<T.length;t+=3){
-    const a=T[t]*3, b=T[t+1]*3, c=T[t+2]*3;
-    const ax=V[a],ay=V[a+1],az=V[a+2], bx=V[b],by=V[b+1],bz=V[b+2], cx=V[c],cy=V[c+1],cz=V[c+2];
-    const minx=Math.floor(Math.min(ax,bx,cx)-X0), maxx=Math.ceil(Math.max(ax,bx,cx)-X0);
-    const miny=Math.floor(Math.min(ay,by,cy)-Y0), maxy=Math.ceil(Math.max(ay,by,cy)-Y0);
-    const den = (by-cy)*(ax-cx)+(cx-bx)*(ay-cy);
-    if(Math.abs(den) < 1e-9) continue;
-    for(let iy=Math.max(0,miny); iy<=Math.min(NY-1,maxy); iy++) for(let ix=Math.max(0,minx); ix<=Math.min(NX-1,maxx); ix++){
-      const px=ix+X0, py=iy+Y0;
-      const w1=((by-cy)*(px-cx)+(cx-bx)*(py-cy))/den, w2=((cy-ay)*(px-cx)+(ax-cx)*(py-cy))/den, w3=1-w1-w2;
-      if(w1<-0.02||w2<-0.02||w3<-0.02) continue;
-      const z = w1*az+w2*bz+w3*cz;
-      if(z > depth[iy*NX+ix]) depth[iy*NX+ix] = z;
-    }
-  }
-  // lateral extent: widest |x| of the mesh SURFACE per (y,z) cell, seen from
-  // the side (triangles rasterised in the y-z plane, 1 mm cells). A point of
-  // the arm is inside the head if |x| < this. Using the surface (not just the
-  // sparse vertices) keeps the value continuous along the arm's path.
-  const LY0=-110, LZ0=-30, LC=1, LNY=211, LNZ=111;
-  let lat = new Float32Array(LNY*LNZ);
-  for(let t=0;t<T.length;t+=3){
-    const a=T[t]*3, b=T[t+1]*3, c=T[t+2]*3;
-    const ay=V[a+1],az=V[a+2],ax=Math.abs(V[a]), by=V[b+1],bz=V[b+2],bx=Math.abs(V[b]), cy=V[c+1],cz=V[c+2],cx=Math.abs(V[c]);
-    const den = (bz-cz)*(ay-cy)+(cy-by)*(az-cz);
-    if(Math.abs(den) < 1e-9) continue;
-    const miny=Math.floor(Math.min(ay,by,cy)-LY0), maxy=Math.ceil(Math.max(ay,by,cy)-LY0);
-    const minz=Math.floor(Math.min(az,bz,cz)-LZ0), maxz=Math.ceil(Math.max(az,bz,cz)-LZ0);
-    for(let iy=Math.max(0,miny); iy<=Math.min(LNY-1,maxy); iy++) for(let iz=Math.max(0,minz); iz<=Math.min(LNZ-1,maxz); iz++){
-      const py=iy+LY0, pz=iz+LZ0;
-      const w1=((bz-cz)*(py-cy)+(cy-by)*(pz-cz))/den, w2=((cz-az)*(py-cy)+(ay-cy)*(pz-cz))/den, w3=1-w1-w2;
-      if(w1<-0.02||w2<-0.02||w3<-0.02) continue;
-      const x = w1*ax+w2*bx+w3*cx;
-      if(x > lat[iy*LNZ+iz]) lat[iy*LNZ+iz] = x;
-    }
-  }
-  return { depth, X0, Y0, NX, NY, lat, LY0, LZ0, LC, LNY, LNZ };
-}
-function arSurfaceZ(head, x, y){
-  const ix=Math.round(x-head.X0), iy=Math.round(y-head.Y0);
-  if(ix<0||ix>=head.NX||iy<0||iy>=head.NY) return -1e9;
-  return head.depth[iy*head.NX+ix];
-}
-function arHeadHalfWidth(head, y, z){
-  const S = AR_SKULL;
-  const e = 1 - ((y-S.cy)/S.b)**2 - ((z-S.cz)/S.c)**2;
-  let hw = e > 0 ? S.a*Math.sqrt(e) : 0;
-  const iy=Math.floor((y-head.LY0)/head.LC), iz=Math.floor((z-head.LZ0)/head.LC);
-  if(iy>=0&&iy<head.LNY&&iz>=0&&iz<head.LNZ) hw = Math.max(hw, head.lat[iy*head.LNZ+iz]);
-  return hw;
-}
-
-// centerline of a pootje (relative to its own hinge origin) + its lateral
-// half-thickness along the way — same formulas buildTempleGeometry uses.
-function templeCenterlinePoints(pootje, side){
-  const templeLen = Math.abs(pootje.curvePoints[pootje.curvePoints.length-1][0]) || TEMPLE_LENGTH_MM;
-  return pootje.curvePoints.map(([z,y]) => {
-    const f = Math.abs(z) / templeLen;
-    return new THREE.Vector3(side * f * pootje.flare, y, z);
-  });
-}
-const arHead = arBuildHead();
-
-// invisible head (depth only): the canonical face mesh + an assumed skull, so
-// pootjes disappear behind the real head/ears instead of being drawn over the
-// face. Occluder only — never part of the bril. Placed/scaled per frame.
-const headRig = new THREE.Group();
-(function(){
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(AR_CANON, 3));
-  g.setIndex(AR_FACE_TRIS);
-  const mat = new THREE.MeshBasicMaterial({ colorWrite:false, side:THREE.DoubleSide });
-  const face = new THREE.Mesh(g, mat); face.renderOrder = -1;
-  const sg = new THREE.SphereGeometry(1, 48, 32); sg.scale(AR_SKULL.a, AR_SKULL.b, AR_SKULL.c);
-  const skull = new THREE.Mesh(sg, mat); skull.position.set(0, AR_SKULL.cy, AR_SKULL.cz); skull.renderOrder = -1;
-  headRig.add(face, skull);
-  headRig.matrixAutoUpdate = true;
-})();
-arAnchor.add(headRig);
-
+// invisible head (depth only) so pootjes disappear behind the head/ears
+// instead of being drawn over the face. This is an occluder, not part of
+// the bril — the product model itself is untouched.
+const headOccluderGeo = new THREE.SphereGeometry(1, 48, 32);
+headOccluderGeo.scale(80, 105, 95); // ≈ adult head half-widths in mm; wide enough that pootjes (HINGE.x + flare ≈ 72 mm) run inside it behind the ears
+const headOccluder = new THREE.Mesh(headOccluderGeo, new THREE.MeshBasicMaterial({ colorWrite:false }));
+headOccluder.position.set(0, 12, -LENS_PLANE_OFFSET_MM - 95);
+headOccluder.renderOrder = -1;
+arAnchor.add(headOccluder);
 
 let arModel = null;
 
@@ -1649,95 +1499,6 @@ function modelSizeMm(object){
   });
   const s = box.getSize(new THREE.Vector3());
   return { width:+s.x.toFixed(2), height:+s.y.toFixed(2), depth:+s.z.toFixed(2) };
-}
-
-
-/* ---- temples: pivots about the hinge, fitted to the head ---- */
-let arTemple = null; // { pivots, hinge, samples(Float32Array xyz rel. hinge), depthShift, yaw, pitch, key }
-function arPrepareTemples(){
-  const pivots = {}, hinge = {}, order = [];
-  let front = null;
-  arModel.children.slice().forEach(obj=>{
-    if(obj.userData && obj.userData.part === 'front') front = obj;
-    const side = obj.userData && obj.userData.templeSide;
-    if(!side){ order.push(obj); return; }
-    if(!pivots[side]){
-      const pv = new THREE.Group(); pv.matrixAutoUpdate = false; pv.name = 'temple-pivot'; pv.parent = arModel;
-      pivots[side] = pv; hinge[side] = obj.position.clone(); order.push(pv);
-    }
-    obj.removeFromParent(); pivots[side].add(obj); // mesh keeps its own local transform = the hinge interface
-  });
-  arModel.children = order; // same traversal order as the configurator's group (verifyARMatchesConfigurator)
-  arTemple = null;
-  if(!pivots[1] || !pivots[-1]) return;
-
-  // the temple's own vertices (rel. to the hinge), subsampled, for the head-clearance test
-  const pts = [];
-  pivots[1].children.forEach(m=>{
-    const P = m.geometry.getAttribute('position');
-    const step = Math.max(1, Math.floor(P.count / 500));
-    for(let i=0;i<P.count;i+=step) pts.push(P.getX(i)+m.position.x-hinge[1].x, P.getY(i)+m.position.y-hinge[1].y, P.getZ(i)+m.position.z-hinge[1].z);
-  });
-
-  // depth: how far the frame must slide so its rims/bridge rest on the nose
-  // (canonical face surface) instead of sinking into it or floating off it
-  let shift = 0, binding = 'none';
-  if(front){
-    const P = front.geometry.getAttribute('position'), zBase = AR_PUPIL[2] + LENS_PLANE_OFFSET_MM;
-    let need = -1e9;
-    for(let i=0;i<P.count;i++){
-      const sz = arSurfaceZ(arHead, P.getX(i), AR_PUPIL[1] + P.getY(i));
-      if(sz > -1e8){ const d = sz + AR_NOSE_CLEARANCE - (zBase + P.getZ(i)); if(d > need){ need = d; binding = `x ${P.getX(i).toFixed(0)} y ${P.getY(i).toFixed(0)}`; } }
-    }
-    if(need > -1e8) shift = Math.min(AR_DEPTH_SHIFT_MAX, Math.max(AR_DEPTH_SHIFT_MIN, need));
-  }
-  arTemple = { pivots, hinge, samples:new Float32Array(pts), depthShift:shift, binding, yaw:0, pitch:0, fitG:-1, curYaw:null, curPitch:null, clear:0 };
-}
-
-// smallest outward swing (and the pitch that brings the temple to ear height)
-// at which the temple stays outside the head from hinge to ear. g = this
-// face's size relative to the canonical one.
-function arFitTemples(g){
-  const T = arTemple, h = T.hinge[1], S = T.samples, n = S.length/3;
-  const sh = 12 + T.depthShift;
-  const earZ = g*(AR_EAR_Z - AR_PUPIL[2]) - sh;           // ear depth in the glasses frame
-  const depth = Math.max(10, h.z - earZ);
-  let sy = 0, c = 0, ny = 0, nc = 0, best = 1e9, bestY = 0;
-  for(let i=0;i<n;i++){
-    const dz = Math.abs(-S[i*3+2] - depth);
-    if(dz < best){ best = dz; bestY = S[i*3+1]; }
-    if(dz < 4){ sy += S[i*3+1]; c++; }
-  }
-  const yAtEar = c ? sy/c : bestY;
-  const pitch = Math.min(AR_PITCH_MAX, Math.max(AR_PITCH_MIN, (AR_TEMPLE_TARGET_DROP - yAtEar)/depth));
-  const e = new THREE.Euler(), m = new THREE.Matrix4(), v = new THREE.Vector3();
-  const clearAt = (yaw)=>{
-    e.set(pitch, -yaw, 0, 'YXZ'); m.makeRotationFromEuler(e);
-    let minClear = Infinity;
-    for(let i=0;i<n;i++){
-      v.set(S[i*3], S[i*3+1], S[i*3+2]).applyMatrix4(m);
-      const ax = h.x + v.x, ay = h.y + v.y, az = h.z + v.z;
-      const cz = (az + sh)/g + AR_PUPIL[2];
-      if(cz < AR_EAR_Z) continue;                          // behind the ear the temple wraps round it
-      const cy = ay/g + AR_PUPIL[1];
-      const clear = ax/g - (arHeadHalfWidth(arHead, cy, cz) - AR_TEMPLE_PEN);
-      if(clear < minClear) minClear = clear;
-    }
-    return minClear;
-  };
-  let yaw = AR_YAW_MIN;
-  for(; yaw < AR_YAW_MAX; yaw += 0.1*Math.PI/180) if(clearAt(yaw) >= 0) break;
-  yaw = Math.min(yaw, AR_YAW_MAX);
-  T.yaw = yaw; T.pitch = pitch; T.fitG = g; T.clear = clearAt(yaw);
-}
-function arApplyTemples(){
-  const T = arTemple, e = new THREE.Euler(), r = new THREE.Matrix4(), a = new THREE.Matrix4(), b = new THREE.Matrix4();
-  [1,-1].forEach(side=>{
-    const h = T.hinge[side];
-    e.set(T.curPitch, -side*T.curYaw, 0, 'YXZ'); r.makeRotationFromEuler(e);
-    a.makeTranslation(h.x, h.y, h.z); b.makeTranslation(-h.x, -h.y, -h.z);
-    const pv = T.pivots[side]; pv.matrix.copy(a).multiply(r).multiply(b); pv.matrixWorldNeedsUpdate = true;
-  });
 }
 
 function meshesOf(object){ const out=[]; object.traverse(o=>{ if(o.isMesh) out.push(o); }); return out; }
@@ -1761,8 +1522,6 @@ function syncARModel(){
   arModel = productModel.group.clone(); // shares geometry + material — no second bril
   arModel.userData.configurationKey = productModel.configuration.key;
   arAnchor.add(arModel);
-  arPrepareTemples();
-  arPose = null; // new bril: re-seat
 
   const c = productModel.configuration;
   const size = modelSizeMm(arModel);
@@ -1836,12 +1595,9 @@ async function loop(){
 }
 
 let smoothedPxPerMm = null;
-let arPose = null, arZSign = 1, arMiss = 0, arSmoothG = 1;
 
 // landmarks → head pose. Only rotation + position are applied to arAnchor;
 // the face's size is handled by fitting the camera frustum (px per mm).
-// Rotation = Horn least-squares fit of ~30 STABLE landmarks (no mouth/jaw)
-// to the canonical face; position = the measured pupils; both smoothed.
 function updateHeadPose(landmarks){
   const { rx, ry, cw, ch } = videoCover();
   const mirrored = facingMode === 'user';
@@ -1854,67 +1610,35 @@ function updateHeadPose(landmarks){
     return new THREE.Vector3((u-0.5)*cw, (0.5-v)*ch, -p.z*cw/rx);
   };
 
-  // head rotation (+ this face's size relative to the canonical face)
-  const canon = AR_POSE_LM.map(i=>arCanonPoint(i, mirrored)); // selfie view = mirrored world
-  const obs = AR_POSE_LM.map(i=>{ const p = P(i); return [p.x, p.y, p.z]; });
-  const withSign = (k)=> obs.map(([x,y,z])=>[x,y,z*k]);
-  let fit = arFitPose(canon, withSign(arZSign));
-  const bad = (f)=> f.rms > 0.05*f.s*154;
-  if(bad(fit)){
-    const alt = arFitPose(canon, withSign(-arZSign));
-    if(alt.rms < fit.rms*0.7){ arZSign = -arZSign; fit = alt; console.warn('[AR] landmark-z lijkt omgekeerd; teken omgedraaid.'); }
-  }
-  if(fit.rms > 0.15*fit.s*154){            // half-visible face / glitch: keep the last good pose
-    if(arPose){ arAnchor.visible = true; return; }
-    arAnchor.visible = false; return;
-  }
-
   let pxPerMm;
   if(landmarks.length >= 478){
     const irisPx = (P(469).distanceTo(P(471)) + P(474).distanceTo(P(476))) / 2;
     pxPerMm = irisPx / IRIS_DIAMETER_MM;
   } else {
-    pxPerMm = fit.s;                        // canonical-face scale (no iris landmarks)
+    pxPerMm = P(33).distanceTo(P(263)) / OUTER_CANTHI_MM;
   }
   smoothedPxPerMm = smoothedPxPerMm ? smoothedPxPerMm*0.85 + pxPerMm*0.15 : pxPerMm;
   const k = smoothedPxPerMm;
-
-  const pupils = landmarks.length >= 478
-    ? P(468).add(P(473)).multiplyScalar(0.5)
-    : P(33).add(P(263)).multiplyScalar(0.5);
-
-  // smoothing: heavier when still (no jitter), lighter when moving (no lag)
-  if(!arPose) arPose = { t:pupils.clone(), q:fit.q.clone() };
-  else{
-    const faceW = Math.max(1, k*140);
-    arPose.t.lerp(pupils, Math.min(0.95, 0.25 + arPose.t.distanceTo(pupils)/faceW*10));
-    arPose.q.slerp(fit.q, Math.min(0.9, 0.25 + arPose.q.angleTo(fit.q)*6));
-  }
-  const gRaw = Math.min(1.12, Math.max(0.88, fit.s / k));
-  if(!arPose.seen){ arSmoothG = gRaw; arPose.seen = true; } else arSmoothG += (gRaw - arSmoothG) * 0.1;
 
   // camera frustum in mm: this — not a model scale — maps real mm to pixels
   arCamera.left = -cw/2/k; arCamera.right = cw/2/k;
   arCamera.top = ch/2/k;   arCamera.bottom = -ch/2/k;
   arCamera.updateProjectionMatrix();
 
-  arAnchor.quaternion.copy(arPose.q);
-  const zAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(arPose.q);
-  const shift = arTemple ? arTemple.depthShift : 0;
-  const sh = LENS_PLANE_OFFSET_MM + shift;         // lens plane in front of the pupils (rests on the nose)
-  arAnchor.position.copy(arPose.t).multiplyScalar(1/k).addScaledVector(zAxis, sh);
+  const mm = (v)=> v.divideScalar(k);
+  // model +X must point to the screen-right eye: landmark 263 in the raw
+  // image, landmark 33 once the selfie view is mirrored
+  const xAxis = mirrored ? mm(P(33)).sub(mm(P(263))) : mm(P(263)).sub(mm(P(33)));
+  xAxis.normalize();
+  const upApprox = mm(P(10)).sub(mm(P(152)));
+  const zAxis = new THREE.Vector3().crossVectors(xAxis, upApprox).normalize();
+  const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+  arAnchor.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
 
-  // occluder head: canonical mesh scaled to this face, anchored at the pupils
-  const g = arSmoothG;
-  headRig.scale.setScalar(g);
-  headRig.position.set(-g*AR_PUPIL[0], -g*AR_PUPIL[1], -g*AR_PUPIL[2] - sh);
-
-  if(arTemple){
-    if(Math.abs(arTemple.fitG - g) > 0.01 || arTemple.curYaw === null) arFitTemples(g);
-    if(arTemple.curYaw === null){ arTemple.curYaw = arTemple.yaw; arTemple.curPitch = arTemple.pitch; }
-    else{ arTemple.curYaw += (arTemple.yaw - arTemple.curYaw)*0.2; arTemple.curPitch += (arTemple.pitch - arTemple.curPitch)*0.2; }
-    arApplyTemples();
-  }
+  const pupils = landmarks.length >= 478
+    ? mm(P(468)).add(mm(P(473))).multiplyScalar(0.5)
+    : mm(P(33)).add(mm(P(263))).multiplyScalar(0.5);
+  arAnchor.position.copy(pupils).addScaledVector(zAxis, LENS_PLANE_OFFSET_MM);
   arAnchor.visible = true;
 }
 
@@ -1922,10 +1646,8 @@ function renderAR(){
   const rect = liveCanvas.getBoundingClientRect();
   if(arRenderer.domElement.width !== Math.round(rect.width*arRenderer.getPixelRatio())) resizeLiveCanvas();
   fitVideoBackground();
-  if(lastLandmarks){ arMiss = 0; updateHeadPose(lastLandmarks); }
-  else if(++arMiss > 8){ arAnchor.visible = false; arPose = null; }   // brief tracking loss: hold the last pose
+  if(lastLandmarks) updateHeadPose(lastLandmarks); else arAnchor.visible = false;
   arRenderer.render(arScene, arCamera);
-  renderAR.frames = (renderAR.frames||0) + 1; // test hook: lets a test wait for a fresh frame
 }
 
 snapBtn.addEventListener('click', ()=>{
@@ -1946,11 +1668,8 @@ window.__everywear = {
     if(materialId!==undefined) state.materiaal = materialId;
     refresh();
   },
-  openTryOn, closeTryOn, renderAR, camera, controls, arScene, arAnchor, arCamera, THREE,
+  openTryOn, closeTryOn, renderAR, camera, controls,
   setLandmarks(l){ lastLandmarks = l; },
-  get frames(){ return renderAR.frames||0; },
-  get temple(){ return arTemple && { yawDeg:arTemple.curYaw*180/Math.PI, pitchDeg:arTemple.curPitch*180/Math.PI, depthShift:arTemple.depthShift, binding:arTemple.binding, clear:arTemple.clear, g:arSmoothG }; },
-  debugHead(on){ headRig.children.forEach(m=>{ m.material = new THREE.MeshBasicMaterial({ color:0x4488ff, transparent:true, opacity:on?0.35:1, wireframe:!!on, colorWrite:!!on, side:THREE.DoubleSide }); }); },
 };
 
 refresh();
