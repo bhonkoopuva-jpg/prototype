@@ -1594,7 +1594,7 @@ async function loop(){
   requestAnimationFrame(loop);
 }
 
-let smoothedPxPerMm = null;
+let smoothedPxPerMm = null, arSmoothT = null;
 
 // landmarks → head pose. Only rotation + position are applied to arAnchor;
 // the face's size is handled by fitting the camera frustum (px per mm).
@@ -1633,12 +1633,30 @@ function updateHeadPose(landmarks){
   const upApprox = mm(P(10)).sub(mm(P(152)));
   const zAxis = new THREE.Vector3().crossVectors(xAxis, upApprox).normalize();
   const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
-  arAnchor.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
+  const rawQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
 
   const pupils = landmarks.length >= 478
     ? mm(P(468)).add(mm(P(473))).multiplyScalar(0.5)
     : mm(P(33)).add(mm(P(263))).multiplyScalar(0.5);
-  arAnchor.position.copy(pupils).addScaledVector(zAxis, LENS_PLANE_OFFSET_MM);
+  const rawPos = pupils.clone().addScaledVector(zAxis, LENS_PLANE_OFFSET_MM);
+
+  // smoothing (frame-rate independent): FaceMesh delivers new landmarks at a
+  // lower rate than the screen refreshes and each result carries a little
+  // noise. Easing towards it every frame removes the stutter; the time
+  // constant shrinks while the head moves fast, so there is little lag.
+  const now = performance.now();
+  if(!arAnchor.visible || arSmoothT === null || now - arSmoothT > 500){
+    arAnchor.quaternion.copy(rawQ); arAnchor.position.copy(rawPos);
+  } else {
+    const dt = Math.min(0.1, (now - arSmoothT)/1000);
+    const speed = arAnchor.position.distanceTo(rawPos)/140/Math.max(dt, 1e-3);   // face-widths per second
+    const turn = arAnchor.quaternion.angleTo(rawQ)/Math.max(dt, 1e-3);           // rad per second
+    const tau = Math.max(0.025, 0.14/(1 + speed*2 + turn*1.5));                   // 0.14 s when still → 0.025 s when fast
+    const a = 1 - Math.exp(-dt/tau);
+    arAnchor.quaternion.slerp(rawQ, a);
+    arAnchor.position.lerp(rawPos, a);
+  }
+  arSmoothT = now;
   arAnchor.visible = true;
 }
 
@@ -1646,7 +1664,7 @@ function renderAR(){
   const rect = liveCanvas.getBoundingClientRect();
   if(arRenderer.domElement.width !== Math.round(rect.width*arRenderer.getPixelRatio())) resizeLiveCanvas();
   fitVideoBackground();
-  if(lastLandmarks) updateHeadPose(lastLandmarks); else arAnchor.visible = false;
+  if(lastLandmarks) updateHeadPose(lastLandmarks); else { arAnchor.visible = false; arSmoothT = null; }
   arRenderer.render(arScene, arCamera);
 }
 
@@ -1668,7 +1686,7 @@ window.__everywear = {
     if(materialId!==undefined) state.materiaal = materialId;
     refresh();
   },
-  openTryOn, closeTryOn, renderAR, camera, controls,
+  openTryOn, closeTryOn, renderAR, camera, controls, arAnchor,
   setLandmarks(l){ lastLandmarks = l; },
 };
 
